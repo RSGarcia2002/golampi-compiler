@@ -2,8 +2,8 @@
 
 declare(strict_types=1);
 
-use Antlr\Antlr4\Runtime\CharStreams;
 use Antlr\Antlr4\Runtime\CommonTokenStream;
+use Antlr\Antlr4\Runtime\InputStream;
 use Antlr\Antlr4\Runtime\Error\Exceptions\RecognitionException;
 use Antlr\Antlr4\Runtime\Error\Listeners\BaseErrorListener;
 use Antlr\Antlr4\Runtime\Recognizer;
@@ -16,7 +16,7 @@ if (file_exists($projectRoot . '/vendor/autoload.php')) {
     require_once $projectRoot . '/vendor/autoload.php';
 }
 
-if (!class_exists(CharStreams::class) || !class_exists(CommonTokenStream::class)) {
+if (!class_exists(InputStream::class) || !class_exists(CommonTokenStream::class)) {
     http_response_code(500);
     if (PHP_SAPI !== 'cli') {
         header('Content-Type: application/json; charset=utf-8');
@@ -26,7 +26,7 @@ if (!class_exists(CharStreams::class) || !class_exists(CommonTokenStream::class)
         'ok' => false,
         'errors' => [[
             'type' => 'setup',
-            'description' => 'Falta runtime de ANTLR para PHP. Ejecuta composer install.',
+            'description' => 'Falta o esta incompleto el runtime de ANTLR para PHP. Ejecuta composer install.',
             'line' => 0,
             'column' => 0,
         ]],
@@ -154,7 +154,7 @@ if (($input['ok'] ?? false) !== true) {
 }
 
 $sourceCode = $input['source'];
-$lexer = new GolampiLexer(CharStreams::fromString($sourceCode));
+$lexer = new GolampiLexer(InputStream::fromString($sourceCode));
 $lexerListener = new CollectingErrorListener('lexical');
 $lexer->removeErrorListeners();
 $lexer->addErrorListener($lexerListener);

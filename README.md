@@ -3,7 +3,7 @@
 Compilador de **Golampi** con interfaz web, análisis léxico/sintáctico/semántico y generación de código **ARM64**.
 
 ## Estado actual
-Fase 1 en progreso: base léxica/sintáctica integrada a backend PHP.
+Fase 2 en progreso: base léxica/sintáctica integrada y semántica inicial con tabla de símbolos.
 
 ## Estructura
 - `docs/`: planificación, guía de commits, estado de avances.
@@ -54,6 +54,11 @@ echo 'package main\nfunc main() { var x int = 1; }' | php src/backend/parse.php
 Salida de errores:
 - Archivo: `reports/errors_phase1.json`
 - Formato: `type`, `description`, `line`, `column`
+
+Salida semántica:
+- Archivo: `reports/semantic_errors_phase2.json`
+- Tabla de símbolos: `reports/symbol_table_phase2.json`
+- Validaciones activas: redeclaración en mismo ámbito y uso de identificadores no declarados
 
 ## Flujo de trabajo
 1. Planificar fase.

@@ -19,3 +19,5 @@ src/compiler/generated/
 # Reports runtime outputs
 reports/*.tmp
 reports/errors_phase1.json
+reports/semantic_errors_phase2.json
+reports/symbol_table_phase2.json

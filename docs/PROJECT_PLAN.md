@@ -12,10 +12,10 @@
 - [x] Primer reporte de errores léxicos/sintácticos
 
 ## Fase 2 - Semántica
-- [ ] Tabla de símbolos (ámbitos)
-- [ ] Validación de declaración/uso de variables
+- [x] Tabla de símbolos (ámbitos)
+- [x] Validación de declaración/uso de variables
 - [ ] Validación de tipos en asignación y operaciones
-- [ ] Reporte de errores semánticos
+- [x] Reporte de errores semánticos
 
 ## Fase 3 - Lenguaje requerido
 - [ ] Variables, constantes, nil

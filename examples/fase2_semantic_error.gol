@@ -1,0 +1,8 @@
+package main
+
+func main() {
+  var a int = 10;
+  var a int = 20;
+  b = a + 1;
+  fmt.Println(c);
+}

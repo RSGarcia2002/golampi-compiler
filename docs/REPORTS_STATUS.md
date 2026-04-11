@@ -2,7 +2,7 @@
 
 ## Última actualización
 - Fecha: 2026-04-11
-- Estado general: Fase 1 parcial completada
+- Estado general: Fase 2 en progreso
 
 ## Reporte de Errores
 - Estado: Implementado (léxico/sintáctico)
@@ -11,8 +11,14 @@
 - Fuente: `src/backend/parse.php`
 
 ## Tabla de Símbolos
-- Estado: Pendiente de implementación (Fase 2)
-- Formato objetivo: identificador, tipo, ámbito, valor, línea, columna
+- Estado: Implementado (Fase 2 base)
+- Archivo generado: `reports/symbol_table_phase2.json`
+- Formato: scopes + symbols (id, tipo, ámbito, línea, columna)
+
+## Reporte Semántico
+- Estado: Implementado (declaración/uso + redeclaración en ámbito)
+- Archivo generado: `reports/semantic_errors_phase2.json`
+- Fuente: `src/compiler/semantic/SemanticAnalyzer.php`
 
 ## Código ARM64 (.s)
 - Estado: Pendiente de implementación (Fase 4)
@@ -21,4 +27,5 @@
 ## Notas
 - Gramática base creada en `src/compiler/grammar/Golampi.g4`.
 - Script de generación ANTLR listo en `scripts/generate_antlr_php.sh`.
-- Pendiente ejecutar generación real de parser/lexer en entorno con ANTLR + PHP.
+- Semántica actual: tabla de símbolos con ámbitos y validación de uso/declaración.
+- Pendiente en Fase 2: validación estricta de tipos en operaciones y asignaciones.

@@ -11,6 +11,7 @@ use Antlr\Antlr4\Runtime\Recognizer;
 $projectRoot = dirname(__DIR__, 2);
 $generatedDir = $projectRoot . '/src/compiler/generated';
 $reportsDir = $projectRoot . '/reports';
+$semanticAnalyzerFile = $projectRoot . '/src/compiler/semantic/SemanticAnalyzer.php';
 
 if (file_exists($projectRoot . '/vendor/autoload.php')) {
     require_once $projectRoot . '/vendor/autoload.php';
@@ -164,9 +165,35 @@ $parser = new GolampiParser($tokens);
 $parserListener = new CollectingErrorListener('syntax');
 $parser->removeErrorListeners();
 $parser->addErrorListener($parserListener);
-$parser->program();
+$tree = $parser->program();
 
 $allErrors = array_merge($lexerListener->all(), $parserListener->all());
+$semanticErrors = [];
+$symbolTablePayload = [
+    'generated_at' => date(DATE_ATOM),
+    'total_scopes' => 0,
+    'total_symbols' => 0,
+    'scopes' => [],
+    'symbols' => [],
+];
+
+if (count($allErrors) === 0 && class_exists('GolampiBaseVisitor') && file_exists($semanticAnalyzerFile)) {
+    require_once $semanticAnalyzerFile;
+    $semanticAnalyzer = new SemanticAnalyzer();
+    $semanticAnalyzer->analyze($tree);
+    $semanticErrors = $semanticAnalyzer->allErrors();
+
+    $symbolTableData = $semanticAnalyzer->symbolTableReport();
+    $symbolTablePayload = [
+        'generated_at' => date(DATE_ATOM),
+        'total_scopes' => count($symbolTableData['scopes']),
+        'total_symbols' => count($symbolTableData['symbols']),
+        'scopes' => $symbolTableData['scopes'],
+        'symbols' => $symbolTableData['symbols'],
+    ];
+}
+
+$allErrors = array_merge($allErrors, $semanticErrors);
 
 if (!is_dir($reportsDir)) {
     mkdir($reportsDir, 0777, true);
@@ -182,6 +209,18 @@ file_put_contents(
     $reportsDir . '/errors_phase1.json',
     json_encode($reportPayload, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE) . PHP_EOL
 );
+file_put_contents(
+    $reportsDir . '/semantic_errors_phase2.json',
+    json_encode([
+        'generated_at' => date(DATE_ATOM),
+        'total_errors' => count($semanticErrors),
+        'errors' => $semanticErrors,
+    ], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE) . PHP_EOL
+);
+file_put_contents(
+    $reportsDir . '/symbol_table_phase2.json',
+    json_encode($symbolTablePayload, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE) . PHP_EOL
+);
 
 if (PHP_SAPI !== 'cli') {
     header('Content-Type: application/json; charset=utf-8');
@@ -190,6 +229,11 @@ if (PHP_SAPI !== 'cli') {
 echo json_encode([
     'ok' => count($allErrors) === 0,
     'errors' => $allErrors,
+    'semantic_errors' => $semanticErrors,
+    'symbol_table' => [
+        'total_scopes' => $symbolTablePayload['total_scopes'],
+        'total_symbols' => $symbolTablePayload['total_symbols'],
+    ],
 ], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE) . PHP_EOL;
 
 exit(count($allErrors) === 0 ? 0 : 1);

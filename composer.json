@@ -3,7 +3,7 @@
   "description": "Golampi compiler backend and ANTLR integration",
   "type": "project",
   "require": {
-    "antlr/antlr4-php-runtime": "^1.0"
+    "antlr/antlr4-php-runtime": "^0.9.1"
   },
   "autoload": {
     "psr-4": {

@@ -1,0 +1,13 @@
+{
+  "name": "golampi/compiler",
+  "description": "Golampi compiler backend and ANTLR integration",
+  "type": "project",
+  "require": {
+    "antlr/antlr4-php-runtime": "^1.0"
+  },
+  "autoload": {
+    "psr-4": {
+      "Golampi\\": "src/"
+    }
+  }
+}

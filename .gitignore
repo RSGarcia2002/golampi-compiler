@@ -9,10 +9,13 @@
 build/
 dist/
 *.log
+vendor/
+
+# ANTLR generated artifacts
+src/compiler/generated/
+*.tokens
+*.interp
 
 # Reports runtime outputs
 reports/*.tmp
-
-# ANTLR generated artifacts (ajustar cuando integremos)
-*.tokens
-*.interp
+reports/errors_phase1.json

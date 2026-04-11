@@ -5,7 +5,7 @@ program
     ;
 
 packageDecl
-    : 'package' IDENTIFIER
+    : 'package' ('main' | IDENTIFIER)
     ;
 
 mainFunction

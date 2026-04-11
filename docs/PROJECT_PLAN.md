@@ -3,13 +3,13 @@
 ## Fase 0 - Preparación
 - [x] Estructura base del proyecto
 - [x] Checklist maestro y política de commits
-- [ ] Inicializar repositorio y primer commit
+- [x] Inicializar repositorio y primer commit
 
 ## Fase 1 - Base de compilador
-- [ ] Definir gramática ANTLR4 mínima (programa, main, sentencias básicas)
-- [ ] Generar lexer/parser/visitor
-- [ ] Integrar parser con backend PHP
-- [ ] Primer reporte de errores léxicos/sintácticos
+- [x] Definir gramática ANTLR4 mínima (programa, main, sentencias básicas)
+- [~] Generar lexer/parser/visitor (script listo, pendiente ejecutar en entorno con ANTLR)
+- [x] Integrar parser con backend PHP
+- [x] Primer reporte de errores léxicos/sintácticos
 
 ## Fase 2 - Semántica
 - [ ] Tabla de símbolos (ámbitos)
@@ -45,7 +45,7 @@
 - [ ] Suite de pruebas de aceptación
 - [ ] Ajustes finales
 
-## Criterio de “Done” por fase
+## Criterio de "Done" por fase
 - Código funcional
 - Prueba mínima documentada
 - Reporte actualizado (`docs/REPORTS_STATUS.md`)

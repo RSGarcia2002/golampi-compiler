@@ -1,0 +1,16 @@
+package main
+
+func helper() {
+  var x int = 10;
+  fmt.Println(x + 2);
+}
+
+func main() {
+  var a int = 5;
+  var b float = 3.14;
+  var ready bool = true;
+  var msg string = "hola";
+
+  a = a + 1;
+  fmt.Println(a, b, ready, msg, nil);
+}

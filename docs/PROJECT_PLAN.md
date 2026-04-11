@@ -1,0 +1,52 @@
+# Plan Maestro - Golampi Compiler
+
+## Fase 0 - Preparación
+- [x] Estructura base del proyecto
+- [x] Checklist maestro y política de commits
+- [ ] Inicializar repositorio y primer commit
+
+## Fase 1 - Base de compilador
+- [ ] Definir gramática ANTLR4 mínima (programa, main, sentencias básicas)
+- [ ] Generar lexer/parser/visitor
+- [ ] Integrar parser con backend PHP
+- [ ] Primer reporte de errores léxicos/sintácticos
+
+## Fase 2 - Semántica
+- [ ] Tabla de símbolos (ámbitos)
+- [ ] Validación de declaración/uso de variables
+- [ ] Validación de tipos en asignación y operaciones
+- [ ] Reporte de errores semánticos
+
+## Fase 3 - Lenguaje requerido
+- [ ] Variables, constantes, nil
+- [ ] Operadores aritméticos, relacionales, lógicos
+- [ ] if / switch / for
+- [ ] break / continue / return
+- [ ] Arreglos (incluye multidimensional)
+- [ ] Funciones, parámetros, retornos múltiples, main
+- [ ] Built-ins: fmt.Println, len, now, substr, typeOf
+
+## Fase 4 - Codegen ARM64
+- [ ] Modelo de memoria (stack/heap)
+- [ ] Generación de .s por programa
+- [ ] Prólogo/epílogo de funciones
+- [ ] Labels y saltos para control de flujo
+- [ ] Llamadas a funciones y retorno
+
+## Fase 5 - GUI y reportes
+- [ ] Editor, consola, barra de acciones
+- [ ] Visualización/descarga ASM
+- [ ] Visualización/descarga errores
+- [ ] Visualización/descarga tabla de símbolos
+
+## Fase 6 - Validación Linux
+- [ ] Ensamblar y enlazar ARM64 en Linux
+- [ ] Ejecutar con qemu-aarch64
+- [ ] Suite de pruebas de aceptación
+- [ ] Ajustes finales
+
+## Criterio de “Done” por fase
+- Código funcional
+- Prueba mínima documentada
+- Reporte actualizado (`docs/REPORTS_STATUS.md`)
+- Commit(s) atómicos y descriptivos

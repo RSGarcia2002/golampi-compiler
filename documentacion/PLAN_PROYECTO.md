@@ -27,7 +27,7 @@
 - [x] Built-ins: fmt.Println, len, now, substr, typeOf
 
 ## Fase 4 - Codegen ARM64
-- [ ] Modelo de memoria (stack/heap)
+- [~] Modelo de memoria (stack + heap 1D base para arreglos literales)
 - [~] Generación de .s por programa (AST + instrucciones base para declaraciones/asignaciones/expresiones enteras)
 - [~] Prólogo/epílogo de funciones (stack frame fijo base + etiqueta de salida por función)
 - [~] Labels y saltos para control de flujo (`if`/`for`/`switch` base compilados con saltos)

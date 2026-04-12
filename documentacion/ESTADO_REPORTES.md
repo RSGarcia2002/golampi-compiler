@@ -25,7 +25,9 @@
 - Archivo generado: `reportes/programa_fase4.s`
 - Salida actual: `_start` con salto a `main`, funciones compiladas desde AST, stack frame base, variables locales en stack y operaciones enteras.
 - Salida actual (extra): control `if`/`for`/`switch` con labels/saltos base, soporte de `break/continue` en codegen, llamadas a funciones declaradas y retorno por etiqueta de salida.
-- Pendiente: optimización/limpieza de flujo generado, manejo completo de built-ins en runtime y modelo de memoria final.
+- Salida actual (heap): arreglos literales 1D reservados en heap (`heap_base`/`heap_end`) con header de longitud y validación OOM base.
+- Salida actual (built-ins): `len` resuelto en compilación para literales/variables con longitud conocida y lectura de longitud para arreglos.
+- Pendiente: runtime completo para `now`/`substr`/`typeOf`, arrays multidimensionales y optimización fina de ASM.
 
 ## Notas
 - Gramática base creada en `fuente/compilador/gramatica/Golampi.g4`.

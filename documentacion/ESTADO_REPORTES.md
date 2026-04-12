@@ -21,8 +21,9 @@
 - Fuente: `fuente/compilador/semantica/AnalizadorSemantico.php`
 
 ## Código ARM64 (.s)
-- Estado: Pendiente de implementación (Fase 4)
-- Salida objetivo: archivo ensamblador descargable y visible en GUI
+- Estado: Implementado base (Fase 4 inicial)
+- Archivo generado: `reportes/programa_fase4.s`
+- Salida objetivo pendiente: generación completa por funciones/control de flujo
 
 ## Notas
 - Gramática base creada en `fuente/compilador/gramatica/Golampi.g4`.
@@ -30,3 +31,5 @@
 - Semántica actual: tabla de símbolos con ámbitos, validación de uso/declaración y reglas de tipos en expresiones/asignaciones.
 - Control de flujo activo: `if`, `for`, `break`, `continue` con validaciones semánticas de contexto y condición booleana.
 - Nuevos soportes Fase 3: `switch` con validación de tipos en `case`, y `const` con prohibición de reasignación.
+- Funciones activas: parámetros tipados, llamadas con validación de aridad/tipos, retorno simple tipado.
+- Built-ins activos: `fmt.Println`, `len`, `typeOf`.

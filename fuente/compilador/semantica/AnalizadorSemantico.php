@@ -23,10 +23,19 @@ final class AnalizadorSemantico extends GolampiBaseVisitor
     private int $nivelBucles = 0;
     private int $nivelSwitch = 0;
 
+    /** @var array<string, array{parametros:array<int,string>,retorno:array<int,string>,builtin:bool}> */
+    private array $firmasFunciones = [];
+
+    /** @var array<int, array{nombre:string,retorno:array<int,string>}> */
+    private array $pilaFunciones = [];
+
     public function __construct()
     {
         $this->tablaSimbolos = new TablaSimbolos();
         $this->tablaSimbolos->enterScope('global', 'global', 0, 0);
+
+        $this->registrarFuncionBuiltin('len', [self::TYPE_STRING], [self::TYPE_INT]);
+        $this->registrarFuncionBuiltin('typeOf', [self::TYPE_UNKNOWN], [self::TYPE_STRING]);
     }
 
     public function analyze(object $tree): void
@@ -49,51 +58,105 @@ final class AnalizadorSemantico extends GolampiBaseVisitor
         ];
     }
 
+    public function visitProgram($ctx): mixed
+    {
+        foreach ($ctx->functionDecl() as $funcionCtx) {
+            $nombre = $funcionCtx->IDENTIFIER()->getText();
+            $token = $funcionCtx->IDENTIFIER()->getSymbol();
+            $tiposParametros = $this->tiposParametrosDe($funcionCtx->paramList());
+            $tiposRetorno = $this->tiposRetornoDe($funcionCtx->returnType());
+
+            $this->registrarFuncion(
+                $nombre,
+                $tiposParametros,
+                $tiposRetorno,
+                $token->getLine(),
+                $token->getCharPositionInLine()
+            );
+        }
+
+        $mainToken = $ctx->mainFunction()->getStart();
+        $this->registrarFuncion(
+            'main',
+            [],
+            [],
+            $mainToken->getLine(),
+            $mainToken->getCharPositionInLine()
+        );
+
+        return $this->visitChildren($ctx);
+    }
+
     public function visitFunctionDecl($ctx): mixed
     {
         $identifier = $ctx->IDENTIFIER();
         $name = $identifier->getText();
         $token = $identifier->getSymbol();
+        $firma = $this->firmasFunciones[$name] ?? ['parametros' => [], 'retorno' => [], 'builtin' => false];
+        $tiposParametros = $firma['parametros'];
+        $tiposRetorno = $firma['retorno'];
 
-        $declared = $this->tablaSimbolos->declare(
-            $name,
-            'function',
+        $this->tablaSimbolos->enterScope(
+            'funcion_' . $name,
+            'funcion',
             $token->getLine(),
-            $token->getCharPositionInLine(),
-            'function'
+            $token->getCharPositionInLine()
         );
 
-        if (!$declared) {
-            $this->addSemanticError(
-                "Redeclaracion de funcion '$name' en el mismo ambito.",
-                $token->getLine(),
-                $token->getCharPositionInLine()
-            );
+        if ($ctx->paramList() !== null) {
+            $parametrosCtx = $ctx->paramList()->param();
+            foreach ($parametrosCtx as $index => $paramCtx) {
+                $paramId = $paramCtx->IDENTIFIER();
+                $paramName = $paramId->getText();
+                $paramToken = $paramId->getSymbol();
+                $paramType = $tiposParametros[$index] ?? self::TYPE_UNKNOWN;
+
+                $ok = $this->tablaSimbolos->declare(
+                    $paramName,
+                    $paramType,
+                    $paramToken->getLine(),
+                    $paramToken->getCharPositionInLine(),
+                    'parametro'
+                );
+
+                if (!$ok) {
+                    $this->addSemanticError(
+                        "Parametro duplicado '$paramName' en funcion '$name'.",
+                        $paramToken->getLine(),
+                        $paramToken->getCharPositionInLine()
+                    );
+                }
+            }
         }
 
-        return $this->visitChildren($ctx);
+        $this->pilaFunciones[] = ['nombre' => $name, 'retorno' => $tiposRetorno];
+        foreach ($ctx->block()->statement() as $statement) {
+            $this->visit($statement);
+        }
+        array_pop($this->pilaFunciones);
+        $this->tablaSimbolos->exitScope();
+
+        return null;
     }
 
     public function visitMainFunction($ctx): mixed
     {
         $token = $ctx->getStart();
-        $declared = $this->tablaSimbolos->declare(
-            'main',
-            'function',
+        $this->tablaSimbolos->enterScope(
+            'funcion_main',
+            'funcion',
             $token->getLine(),
-            $token->getCharPositionInLine(),
-            'function'
+            $token->getCharPositionInLine()
         );
 
-        if (!$declared) {
-            $this->addSemanticError(
-                "Redeclaracion de funcion 'main' en el mismo ambito.",
-                $token->getLine(),
-                $token->getCharPositionInLine()
-            );
+        $this->pilaFunciones[] = ['nombre' => 'main', 'retorno' => []];
+        foreach ($ctx->block()->statement() as $statement) {
+            $this->visit($statement);
         }
+        array_pop($this->pilaFunciones);
+        $this->tablaSimbolos->exitScope();
 
-        return $this->visitChildren($ctx);
+        return null;
     }
 
     public function visitBlock($ctx): mixed
@@ -245,6 +308,69 @@ final class AnalizadorSemantico extends GolampiBaseVisitor
         return (string) ($resolved['type'] ?? self::TYPE_UNKNOWN);
     }
 
+    public function visitCallExpr($ctx): mixed
+    {
+        $nombre = $ctx->IDENTIFIER()->getText();
+        $token = $ctx->IDENTIFIER()->getSymbol();
+
+        if (!isset($this->firmasFunciones[$nombre])) {
+            $this->addSemanticError(
+                "Llamada a funcion '$nombre' no declarada.",
+                $token->getLine(),
+                $token->getCharPositionInLine()
+            );
+            if ($ctx->argList() !== null) {
+                foreach ($ctx->argList()->expr() as $argExpr) {
+                    $this->visit($argExpr);
+                }
+            }
+            return self::TYPE_ERROR;
+        }
+
+        $firma = $this->firmasFunciones[$nombre];
+        $tiposEsperados = $firma['parametros'];
+        $tiposRecibidos = [];
+
+        if ($ctx->argList() !== null) {
+            foreach ($ctx->argList()->expr() as $argExpr) {
+                $tipoArg = $this->visit($argExpr);
+                $tiposRecibidos[] = is_string($tipoArg) ? $tipoArg : self::TYPE_UNKNOWN;
+            }
+        }
+
+        if (count($tiposEsperados) !== count($tiposRecibidos)) {
+            $this->addSemanticError(
+                "Llamada invalida a '$nombre': se esperaban " . count($tiposEsperados)
+                . " parametro(s) y se recibieron " . count($tiposRecibidos) . ".",
+                $token->getLine(),
+                $token->getCharPositionInLine()
+            );
+        }
+
+        $comparables = min(count($tiposEsperados), count($tiposRecibidos));
+        for ($i = 0; $i < $comparables; $i++) {
+            $esperado = $tiposEsperados[$i];
+            $recibido = $tiposRecibidos[$i];
+            if ($esperado === self::TYPE_UNKNOWN) {
+                continue;
+            }
+            if (!$this->tiposCompatiblesAsignacion($esperado, $recibido)) {
+                $this->addSemanticError(
+                    "Llamada invalida a '$nombre': parametro " . ($i + 1)
+                    . " requiere '$esperado' y se recibio '$recibido'.",
+                    $token->getLine(),
+                    $token->getCharPositionInLine()
+                );
+            }
+        }
+
+        if ($firma['retorno'] === []) {
+            return self::TYPE_UNKNOWN;
+        }
+
+        return $firma['retorno'][0];
+    }
+
     public function visitLiteralExpr($ctx): mixed
     {
         return $this->visit($ctx->literal());
@@ -358,6 +484,46 @@ final class AnalizadorSemantico extends GolampiBaseVisitor
                 $token->getCharPositionInLine()
             );
         }
+
+        return null;
+    }
+
+    public function visitReturnStmt($ctx): mixed
+    {
+        $token = $ctx->getStart();
+        $funcionActual = $this->pilaFunciones[count($this->pilaFunciones) - 1] ?? null;
+        $retornosEsperados = $funcionActual['retorno'] ?? [];
+
+        if ($retornosEsperados === []) {
+            if ($ctx->expr() !== null) {
+                $this->addSemanticError(
+                    "Return invalido: la funcion '{$funcionActual['nombre']}' no retorna valor.",
+                    $token->getLine(),
+                    $token->getCharPositionInLine()
+                );
+                $this->visit($ctx->expr());
+            }
+            return null;
+        }
+
+        if ($ctx->expr() === null) {
+            $this->addSemanticError(
+                "Return invalido: la funcion '{$funcionActual['nombre']}' debe retornar '{$retornosEsperados[0]}'.",
+                $token->getLine(),
+                $token->getCharPositionInLine()
+            );
+            return null;
+        }
+
+        $tipoRetorno = $this->visit($ctx->expr());
+        $tipoRetorno = is_string($tipoRetorno) ? $tipoRetorno : self::TYPE_UNKNOWN;
+        $this->assertAssignable(
+            $retornosEsperados[0],
+            $tipoRetorno,
+            $token->getLine(),
+            $token->getCharPositionInLine(),
+            "Return invalido: se esperaba '{$retornosEsperados[0]}' y se recibio '$tipoRetorno'."
+        );
 
         return null;
     }
@@ -530,15 +696,20 @@ final class AnalizadorSemantico extends GolampiBaseVisitor
             return;
         }
 
-        if ($this->isSameType($targetType, $exprType)) {
-            return;
-        }
-
-        if ($targetType === self::TYPE_FLOAT && $exprType === self::TYPE_INT) {
+        if ($this->tiposCompatiblesAsignacion($targetType, $exprType)) {
             return;
         }
 
         $this->addSemanticError($message, $line, $column);
+    }
+
+    private function tiposCompatiblesAsignacion(string $destino, string $origen): bool
+    {
+        if ($this->isSameType($destino, $origen)) {
+            return true;
+        }
+
+        return $destino === self::TYPE_FLOAT && $origen === self::TYPE_INT;
     }
 
     private function isNumericType(string $type): bool
@@ -585,5 +756,76 @@ final class AnalizadorSemantico extends GolampiBaseVisitor
             'line' => $line,
             'column' => $column,
         ];
+    }
+
+    /** @return array<int,string> */
+    private function tiposParametrosDe($paramListCtx): array
+    {
+        if ($paramListCtx === null) {
+            return [];
+        }
+
+        $tipos = [];
+        foreach ($paramListCtx->param() as $paramCtx) {
+            $tipos[] = $paramCtx->typeSpec()->getText();
+        }
+        return $tipos;
+    }
+
+    /** @return array<int,string> */
+    private function tiposRetornoDe($returnTypeCtx): array
+    {
+        if ($returnTypeCtx === null) {
+            return [];
+        }
+        return [$returnTypeCtx->typeSpec()->getText()];
+    }
+
+    /** @param array<int,string> $parametros @param array<int,string> $retorno */
+    private function registrarFuncion(
+        string $nombre,
+        array $parametros,
+        array $retorno,
+        int $line,
+        int $column,
+        bool $builtin = false
+    ): void {
+        if (isset($this->firmasFunciones[$nombre])) {
+            $this->addSemanticError(
+                "Redeclaracion de funcion '$nombre'.",
+                $line,
+                $column
+            );
+            return;
+        }
+
+        $this->firmasFunciones[$nombre] = [
+            'parametros' => $parametros,
+            'retorno' => $retorno,
+            'builtin' => $builtin,
+        ];
+
+        $ok = $this->tablaSimbolos->declare(
+            $nombre,
+            'function',
+            $line,
+            $column,
+            $builtin ? 'builtin' : 'function',
+            ['parametros' => $parametros, 'retorno' => $retorno]
+        );
+
+        if (!$ok) {
+            $this->addSemanticError(
+                "Redeclaracion de simbolo '$nombre' en ambito global.",
+                $line,
+                $column
+            );
+        }
+    }
+
+    /** @param array<int,string> $parametros @param array<int,string> $retorno */
+    private function registrarFuncionBuiltin(string $nombre, array $parametros, array $retorno): void
+    {
+        $this->registrarFuncion($nombre, $parametros, $retorno, 0, 0, true);
     }
 }

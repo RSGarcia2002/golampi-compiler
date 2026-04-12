@@ -21,14 +21,14 @@
 - [~] Variables, constantes, nil (variables y constantes listas; nil pendiente semántica dedicada)
 - [x] Operadores aritméticos, relacionales, lógicos
 - [x] if / switch / for
-- [~] break / continue / return (break y continue listos; return base ya soportado)
+- [~] break / continue / return (break/continue listos; return con tipo simple listo)
 - [ ] Arreglos (incluye multidimensional)
-- [ ] Funciones, parámetros, retornos múltiples, main
-- [ ] Built-ins: fmt.Println, len, now, substr, typeOf
+- [~] Funciones, parámetros, retornos múltiples, main (parámetros/llamadas/retorno simple listos; retornos múltiples pendientes)
+- [~] Built-ins: fmt.Println, len, now, substr, typeOf (fmt.Println, len y typeOf listos)
 
 ## Fase 4 - Codegen ARM64
 - [ ] Modelo de memoria (stack/heap)
-- [ ] Generación de .s por programa
+- [~] Generación de .s por programa (esqueleto base automático implementado)
 - [ ] Prólogo/epílogo de funciones
 - [ ] Labels y saltos para control de flujo
 - [ ] Llamadas a funciones y retorno

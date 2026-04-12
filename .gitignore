@@ -22,3 +22,4 @@ reportes/*.tmp
 reportes/errores_fase1.json
 reportes/errores_semanticos_fase2.json
 reportes/tabla_simbolos_fase2.json
+reportes/programa_fase4.s

@@ -13,7 +13,19 @@ mainFunction
     ;
 
 functionDecl
-    : 'func' IDENTIFIER '(' ')' block
+    : 'func' IDENTIFIER '(' paramList? ')' returnType? block
+    ;
+
+paramList
+    : param (',' param)*
+    ;
+
+param
+    : IDENTIFIER typeSpec
+    ;
+
+returnType
+    : typeSpec
     ;
 
 block
@@ -104,6 +116,7 @@ expr
     | expr '&&' expr                    # binaryExpr
     | expr '||' expr                    # binaryExpr
     | '(' expr ')'                      # groupedExpr
+    | IDENTIFIER '(' argList? ')'       # callExpr
     | literal                           # literalExpr
     | IDENTIFIER                        # identifierExpr
     ;

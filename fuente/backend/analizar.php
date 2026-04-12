@@ -12,6 +12,7 @@ $projectRoot = dirname(__DIR__, 2);
 $generatedDir = $projectRoot . '/fuente/compilador/generado';
 $reportsDir = $projectRoot . '/reportes';
 $semanticAnalyzerFile = $projectRoot . '/fuente/compilador/semantica/AnalizadorSemantico.php';
+$generadorArm64File = $projectRoot . '/fuente/compilador/generacion_codigo/GeneradorARM64.php';
 
 if (file_exists($projectRoot . '/vendor/autoload.php')) {
     require_once $projectRoot . '/vendor/autoload.php';
@@ -176,6 +177,7 @@ $symbolTablePayload = [
     'scopes' => [],
     'symbols' => [],
 ];
+$asmGenerado = null;
 
 if (count($allErrors) === 0 && class_exists('GolampiBaseVisitor') && file_exists($semanticAnalyzerFile)) {
     require_once $semanticAnalyzerFile;
@@ -194,6 +196,12 @@ if (count($allErrors) === 0 && class_exists('GolampiBaseVisitor') && file_exists
 }
 
 $allErrors = array_merge($allErrors, $semanticErrors);
+
+if (count($allErrors) === 0 && file_exists($generadorArm64File)) {
+    require_once $generadorArm64File;
+    $generador = new GeneradorARM64();
+    $asmGenerado = $generador->generarProgramaBase($sourceCode, $symbolTablePayload);
+}
 
 if (!is_dir($reportsDir)) {
     mkdir($reportsDir, 0777, true);
@@ -221,6 +229,9 @@ file_put_contents(
     $reportsDir . '/tabla_simbolos_fase2.json',
     json_encode($symbolTablePayload, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE) . PHP_EOL
 );
+if ($asmGenerado !== null) {
+    file_put_contents($reportsDir . '/programa_fase4.s', $asmGenerado);
+}
 
 if (PHP_SAPI !== 'cli') {
     header('Content-Type: application/json; charset=utf-8');
@@ -233,6 +244,10 @@ echo json_encode([
     'symbol_table' => [
         'total_scopes' => $symbolTablePayload['total_scopes'],
         'total_symbols' => $symbolTablePayload['total_symbols'],
+    ],
+    'arm64' => [
+        'generado' => $asmGenerado !== null,
+        'archivo' => $asmGenerado !== null ? 'reportes/programa_fase4.s' : null,
     ],
 ], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE) . PHP_EOL;
 

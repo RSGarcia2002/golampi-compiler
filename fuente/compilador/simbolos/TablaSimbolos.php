@@ -50,7 +50,15 @@ final class TablaSimbolos
         return $this->scopes[$scopeId] ?? null;
     }
 
-    public function declare(string $name, string $type, int $line, int $column, string $kind = 'variable'): bool
+    /** @param array<string,mixed> $extra */
+    public function declare(
+        string $name,
+        string $type,
+        int $line,
+        int $column,
+        string $kind = 'variable',
+        array $extra = []
+    ): bool
     {
         $scopeId = $this->scopeStack[count($this->scopeStack) - 1] ?? null;
         if ($scopeId === null) {
@@ -61,7 +69,7 @@ final class TablaSimbolos
             return false;
         }
 
-        $this->scopes[$scopeId]['symbols'][$name] = [
+        $this->scopes[$scopeId]['symbols'][$name] = array_merge([
             'name' => $name,
             'kind' => $kind,
             'type' => $type,
@@ -70,7 +78,7 @@ final class TablaSimbolos
             'scope_id' => $scopeId,
             'scope_name' => $this->scopes[$scopeId]['name'],
             'scope_depth' => $this->scopes[$scopeId]['depth'],
-        ];
+        ], $extra);
 
         return true;
     }

@@ -1,0 +1,13 @@
+package main
+
+func doble(a int) int {
+  return "x";
+}
+
+func main() {
+  var x int = doble();
+  var y int = doble("2");
+  var z int = desconocida(1);
+  var t int = len(10);
+  fmt.Println(x, y, z, t);
+}

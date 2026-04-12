@@ -48,5 +48,5 @@
 ## Criterio de "Done" por fase
 - Código funcional
 - Prueba mínima documentada
-- Reporte actualizado (`docs/REPORTS_STATUS.md`)
+- Reporte actualizado (`documentacion/ESTADO_REPORTES.md`)
 - Commit(s) atómicos y descriptivos

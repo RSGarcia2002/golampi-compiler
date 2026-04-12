@@ -6,26 +6,26 @@
 
 ## Reporte de Errores
 - Estado: Implementado (léxico/sintáctico)
-- Archivo generado: `reports/errors_phase1.json`
+- Archivo generado: `reportes/errores_fase1.json`
 - Formato: `type`, `description`, `line`, `column`
-- Fuente: `src/backend/parse.php`
+- Fuente: `fuente/backend/analizar.php`
 
 ## Tabla de Símbolos
 - Estado: Implementado (Fase 2 base)
-- Archivo generado: `reports/symbol_table_phase2.json`
+- Archivo generado: `reportes/tabla_simbolos_fase2.json`
 - Formato: scopes + symbols (id, tipo, ámbito, línea, columna)
 
 ## Reporte Semántico
 - Estado: Implementado (declaración/uso + redeclaración + chequeo de tipos)
-- Archivo generado: `reports/semantic_errors_phase2.json`
-- Fuente: `src/compiler/semantic/SemanticAnalyzer.php`
+- Archivo generado: `reportes/errores_semanticos_fase2.json`
+- Fuente: `fuente/compilador/semantica/AnalizadorSemantico.php`
 
 ## Código ARM64 (.s)
 - Estado: Pendiente de implementación (Fase 4)
 - Salida objetivo: archivo ensamblador descargable y visible en GUI
 
 ## Notas
-- Gramática base creada en `src/compiler/grammar/Golampi.g4`.
-- Script de generación ANTLR listo en `scripts/generate_antlr_php.sh`.
+- Gramática base creada en `fuente/compilador/gramatica/Golampi.g4`.
+- Script de generación ANTLR listo en `guiones/generar_antlr_php.sh`.
 - Semántica actual: tabla de símbolos con ámbitos, validación de uso/declaración y reglas de tipos en expresiones/asignaciones.
 - Control de flujo activo: `if`, `for`, `break`, `continue` con validaciones semánticas de contexto y condición booleana.

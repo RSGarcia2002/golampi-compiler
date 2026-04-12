@@ -2,14 +2,14 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-GRAMMAR_FILE="$ROOT_DIR/src/compiler/grammar/Golampi.g4"
-OUTPUT_DIR="$ROOT_DIR/src/compiler/generated"
+GRAMMAR_FILE="$ROOT_DIR/fuente/compilador/gramatica/Golampi.g4"
+OUTPUT_DIR="$ROOT_DIR/fuente/compilador/generado"
 
-ANTLR_JAR="${ANTLR_JAR:-$ROOT_DIR/tools/antlr-4.13.2-complete.jar}"
+ANTLR_JAR="${ANTLR_JAR:-$ROOT_DIR/herramientas/antlr-4.13.2-complete.jar}"
 
 if [[ ! -f "$ANTLR_JAR" ]]; then
   echo "[error] No se encontro ANTLR jar en: $ANTLR_JAR"
-  echo "        Define ANTLR_JAR=/ruta/antlr-4.x-complete.jar o coloca el jar en tools/."
+  echo "        Define ANTLR_JAR=/ruta/antlr-4.x-complete.jar o coloca el jar en herramientas/."
   exit 1
 fi
 

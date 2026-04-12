@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-final class SymbolTable
+final class TablaSimbolos
 {
     /** @var array<int, array<string, mixed>> */
     private array $scopes = [];

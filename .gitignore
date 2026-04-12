@@ -12,13 +12,13 @@ dist/
 vendor/
 
 # ANTLR generated artifacts
-src/compiler/generated/
-src/compiler/grammar/.antlr/
+fuente/compilador/generado/
+fuente/compilador/gramatica/.antlr/
 *.tokens
 *.interp
 
 # Reports runtime outputs
-reports/*.tmp
-reports/errors_phase1.json
-reports/semantic_errors_phase2.json
-reports/symbol_table_phase2.json
+reportes/*.tmp
+reportes/errores_fase1.json
+reportes/errores_semanticos_fase2.json
+reportes/tabla_simbolos_fase2.json

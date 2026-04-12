@@ -9,9 +9,9 @@ use Antlr\Antlr4\Runtime\Error\Listeners\BaseErrorListener;
 use Antlr\Antlr4\Runtime\Recognizer;
 
 $projectRoot = dirname(__DIR__, 2);
-$generatedDir = $projectRoot . '/src/compiler/generated';
-$reportsDir = $projectRoot . '/reports';
-$semanticAnalyzerFile = $projectRoot . '/src/compiler/semantic/SemanticAnalyzer.php';
+$generatedDir = $projectRoot . '/fuente/compilador/generado';
+$reportsDir = $projectRoot . '/reportes';
+$semanticAnalyzerFile = $projectRoot . '/fuente/compilador/semantica/AnalizadorSemantico.php';
 
 if (file_exists($projectRoot . '/vendor/autoload.php')) {
     require_once $projectRoot . '/vendor/autoload.php';
@@ -54,7 +54,7 @@ if (!class_exists('GolampiLexer') || !class_exists('GolampiParser')) {
         'ok' => false,
         'errors' => [[
             'type' => 'setup',
-            'description' => 'No se encontraron GolampiLexer/GolampiParser. Ejecuta scripts/generate_antlr_php.sh primero.',
+            'description' => 'No se encontraron GolampiLexer/GolampiParser. Ejecuta guiones/generar_antlr_php.sh primero.',
             'line' => 0,
             'column' => 0,
         ]],
@@ -119,7 +119,7 @@ function readInputSource(): array
             return ['ok' => true, 'source' => $stdin];
         }
 
-        return ['ok' => false, 'error' => 'Uso CLI: php src/backend/parse.php <archivo.gol> o enviar código por STDIN.'];
+        return ['ok' => false, 'error' => 'Uso CLI: php fuente/backend/analizar.php <archivo.gol> o enviar código por STDIN.'];
     }
 
     $rawInput = file_get_contents('php://input');
@@ -179,11 +179,11 @@ $symbolTablePayload = [
 
 if (count($allErrors) === 0 && class_exists('GolampiBaseVisitor') && file_exists($semanticAnalyzerFile)) {
     require_once $semanticAnalyzerFile;
-    $semanticAnalyzer = new SemanticAnalyzer();
+    $semanticAnalyzer = new AnalizadorSemantico();
     $semanticAnalyzer->analyze($tree);
     $semanticErrors = $semanticAnalyzer->allErrors();
 
-    $symbolTableData = $semanticAnalyzer->symbolTableReport();
+    $symbolTableData = $semanticAnalyzer->reporteTablaSimbolos();
     $symbolTablePayload = [
         'generated_at' => date(DATE_ATOM),
         'total_scopes' => count($symbolTableData['scopes']),
@@ -206,11 +206,11 @@ $reportPayload = [
 ];
 
 file_put_contents(
-    $reportsDir . '/errors_phase1.json',
+    $reportsDir . '/errores_fase1.json',
     json_encode($reportPayload, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE) . PHP_EOL
 );
 file_put_contents(
-    $reportsDir . '/semantic_errors_phase2.json',
+    $reportsDir . '/errores_semanticos_fase2.json',
     json_encode([
         'generated_at' => date(DATE_ATOM),
         'total_errors' => count($semanticErrors),
@@ -218,7 +218,7 @@ file_put_contents(
     ], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE) . PHP_EOL
 );
 file_put_contents(
-    $reportsDir . '/symbol_table_phase2.json',
+    $reportsDir . '/tabla_simbolos_fase2.json',
     json_encode($symbolTablePayload, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE) . PHP_EOL
 );
 

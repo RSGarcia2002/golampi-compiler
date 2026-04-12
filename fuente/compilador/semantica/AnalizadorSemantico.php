@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-require_once __DIR__ . '/../symbols/SymbolTable.php';
+require_once __DIR__ . '/../simbolos/TablaSimbolos.php';
 
-final class SemanticAnalyzer extends GolampiBaseVisitor
+final class AnalizadorSemantico extends GolampiBaseVisitor
 {
     private const TYPE_INT = 'int';
     private const TYPE_FLOAT = 'float';
@@ -14,7 +14,7 @@ final class SemanticAnalyzer extends GolampiBaseVisitor
     private const TYPE_UNKNOWN = 'unknown';
     private const TYPE_ERROR = 'error';
 
-    private SymbolTable $symbolTable;
+    private TablaSimbolos $tablaSimbolos;
 
     /** @var array<int, array{type:string,description:string,line:int,column:int}> */
     private array $errors = [];
@@ -24,8 +24,8 @@ final class SemanticAnalyzer extends GolampiBaseVisitor
 
     public function __construct()
     {
-        $this->symbolTable = new SymbolTable();
-        $this->symbolTable->enterScope('global', 'global', 0, 0);
+        $this->tablaSimbolos = new TablaSimbolos();
+        $this->tablaSimbolos->enterScope('global', 'global', 0, 0);
     }
 
     public function analyze(object $tree): void
@@ -40,11 +40,11 @@ final class SemanticAnalyzer extends GolampiBaseVisitor
     }
 
     /** @return array<string, mixed> */
-    public function symbolTableReport(): array
+    public function reporteTablaSimbolos(): array
     {
         return [
-            'scopes' => $this->symbolTable->allScopes(),
-            'symbols' => $this->symbolTable->allSymbols(),
+            'scopes' => $this->tablaSimbolos->allScopes(),
+            'symbols' => $this->tablaSimbolos->allSymbols(),
         ];
     }
 
@@ -54,7 +54,7 @@ final class SemanticAnalyzer extends GolampiBaseVisitor
         $name = $identifier->getText();
         $token = $identifier->getSymbol();
 
-        $declared = $this->symbolTable->declare(
+        $declared = $this->tablaSimbolos->declare(
             $name,
             'function',
             $token->getLine(),
@@ -76,7 +76,7 @@ final class SemanticAnalyzer extends GolampiBaseVisitor
     public function visitMainFunction($ctx): mixed
     {
         $token = $ctx->getStart();
-        $declared = $this->symbolTable->declare(
+        $declared = $this->tablaSimbolos->declare(
             'main',
             'function',
             $token->getLine(),
@@ -101,7 +101,7 @@ final class SemanticAnalyzer extends GolampiBaseVisitor
         $start = $ctx->getStart();
         $scopeName = 'block_' . $this->blockCounter;
 
-        $this->symbolTable->enterScope(
+        $this->tablaSimbolos->enterScope(
             $scopeName,
             'block',
             $start->getLine(),
@@ -109,7 +109,7 @@ final class SemanticAnalyzer extends GolampiBaseVisitor
         );
 
         $result = $this->visitChildren($ctx);
-        $this->symbolTable->exitScope();
+        $this->tablaSimbolos->exitScope();
 
         return $result;
     }
@@ -121,7 +121,7 @@ final class SemanticAnalyzer extends GolampiBaseVisitor
         $type = $ctx->typeSpec()->getText();
         $token = $identifier->getSymbol();
 
-        $declared = $this->symbolTable->declare(
+        $declared = $this->tablaSimbolos->declare(
             $name,
             $type,
             $token->getLine(),
@@ -156,7 +156,7 @@ final class SemanticAnalyzer extends GolampiBaseVisitor
         $name = $identifier->getText();
         $token = $identifier->getSymbol();
 
-        $resolved = $this->symbolTable->resolve($name);
+        $resolved = $this->tablaSimbolos->resolve($name);
         if ($resolved === null) {
             $this->addSemanticError(
                 "Variable '$name' usada sin declaracion previa.",
@@ -185,7 +185,7 @@ final class SemanticAnalyzer extends GolampiBaseVisitor
         $name = $ctx->getText();
         $token = $ctx->getStart();
 
-        $resolved = $this->symbolTable->resolve($name);
+        $resolved = $this->tablaSimbolos->resolve($name);
         if ($resolved === null) {
             $this->addSemanticError(
                 "Identificador '$name' usado sin declaracion previa.",

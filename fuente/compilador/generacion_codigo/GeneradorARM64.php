@@ -1003,10 +1003,6 @@ final class GeneradorARM64 extends GolampiBaseVisitor
 
     private function emitRuntimeHelpers(): void
     {
-        if (!$this->usaHeap && $this->stringPorEtiqueta === [] && !$this->usaRuntimePrint) {
-            return;
-        }
-
         if ($this->usaRuntimePrint) {
             $this->emit('');
             $this->emit('_golampi_print_nl:');
@@ -1104,14 +1100,12 @@ final class GeneradorARM64 extends GolampiBaseVisitor
             $this->emit('    .asciz "false"');
         }
 
-        if ($this->usaHeap) {
-            $this->emit('');
-            $this->emit('.section .bss');
-            $this->emit('    .align 3');
-            $this->emit('heap_base:');
-            $this->emit('    .skip 1048576');
-            $this->emit('heap_end:');
-        }
+        $this->emit('');
+        $this->emit('.section .bss');
+        $this->emit('    .align 3');
+        $this->emit('heap_base:');
+        $this->emit('    .skip 1048576');
+        $this->emit('heap_end:');
     }
 
     private function registrarLiteralString(string $valor): string

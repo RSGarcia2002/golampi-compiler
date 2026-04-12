@@ -3,7 +3,7 @@
 Compilador de **Golampi** con interfaz web, análisis léxico/sintáctico/semántico y generación de código **ARM64**.
 
 ## Estado actual
-Fase 3 en progreso: semántica base completa y control de flujo inicial (`if`, `for`, `break`, `continue`).
+Fase 3 en progreso: semántica base completa, control de flujo (`if`, `for`, `switch`, `break`, `continue`) y soporte inicial de `const`.
 
 ## Estructura
 - `documentacion/`: planificación, guía de commits, estado de avances.
@@ -63,7 +63,7 @@ Salida de errores:
 Salida semántica:
 - Archivo: `reportes/errores_semanticos_fase2.json`
 - Tabla de símbolos: `reportes/tabla_simbolos_fase2.json`
-- Validaciones activas: redeclaración en mismo ámbito, uso de identificadores no declarados, tipos en asignaciones/operaciones y contexto válido de `break/continue`
+- Validaciones activas: redeclaración en mismo ámbito, uso de identificadores no declarados, tipos en asignaciones/operaciones, contexto válido de `break/continue`, compatibilidad de `case` en `switch` y protección de `const`.
 
 ## Flujo de trabajo
 1. Planificar fase.

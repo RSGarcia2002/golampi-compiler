@@ -1,0 +1,14 @@
+package main
+
+func main() {
+  const total int = 10;
+  total = 11;
+
+  switch total {
+    case "diez":
+      fmt.Println("texto invalido");
+      break;
+    default:
+      fmt.Println("ok");
+  }
+}

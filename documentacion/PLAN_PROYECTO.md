@@ -18,9 +18,9 @@
 - [x] Reporte de errores semánticos
 
 ## Fase 3 - Lenguaje requerido
-- [ ] Variables, constantes, nil
-- [ ] Operadores aritméticos, relacionales, lógicos
-- [~] if / switch / for (if y for listos; switch pendiente)
+- [~] Variables, constantes, nil (variables y constantes listas; nil pendiente semántica dedicada)
+- [x] Operadores aritméticos, relacionales, lógicos
+- [x] if / switch / for
 - [~] break / continue / return (break y continue listos; return base ya soportado)
 - [ ] Arreglos (incluye multidimensional)
 - [ ] Funciones, parámetros, retornos múltiples, main

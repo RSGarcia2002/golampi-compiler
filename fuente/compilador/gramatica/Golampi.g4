@@ -22,11 +22,13 @@ block
 
 statement
     : varDecl ';'
+    | constDecl ';'
     | assignment ';'
     | printStmt ';'
     | returnStmt ';'
     | ifStmt
     | forStmt
+    | switchStmt
     | breakStmt ';'
     | continueStmt ';'
     | expr ';'
@@ -41,6 +43,18 @@ forStmt
     : 'for' expr? block
     ;
 
+switchStmt
+    : 'switch' expr '{' switchCase* defaultCase? '}'
+    ;
+
+switchCase
+    : 'case' expr ':' statement*
+    ;
+
+defaultCase
+    : 'default' ':' statement*
+    ;
+
 breakStmt
     : 'break'
     ;
@@ -51,6 +65,10 @@ continueStmt
 
 varDecl
     : 'var' IDENTIFIER typeSpec ('=' expr)?
+    ;
+
+constDecl
+    : 'const' IDENTIFIER typeSpec '=' expr
     ;
 
 typeSpec

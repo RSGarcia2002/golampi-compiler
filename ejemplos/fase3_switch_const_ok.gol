@@ -1,0 +1,21 @@
+package main
+
+func main() {
+  const limite int = 3;
+  var x int = 1;
+
+  for x < limite {
+    switch x {
+      case 1:
+        fmt.Println("uno");
+        break;
+      case 2:
+        fmt.Println("dos");
+        break;
+      default:
+        fmt.Println("otro");
+    }
+
+    x = x + 1;
+  }
+}

@@ -21,6 +21,7 @@ final class AnalizadorSemantico extends GolampiBaseVisitor
 
     private int $blockCounter = 0;
     private int $nivelBucles = 0;
+    private int $nivelSwitch = 0;
 
     public function __construct()
     {
@@ -150,6 +151,42 @@ final class AnalizadorSemantico extends GolampiBaseVisitor
         return null;
     }
 
+    public function visitConstDecl($ctx): mixed
+    {
+        $identifier = $ctx->IDENTIFIER();
+        $name = $identifier->getText();
+        $type = $ctx->typeSpec()->getText();
+        $token = $identifier->getSymbol();
+
+        $declared = $this->tablaSimbolos->declare(
+            $name,
+            $type,
+            $token->getLine(),
+            $token->getCharPositionInLine(),
+            'constante'
+        );
+
+        if (!$declared) {
+            $this->addSemanticError(
+                "Redeclaracion de constante '$name' en el mismo ambito.",
+                $token->getLine(),
+                $token->getCharPositionInLine()
+            );
+            return null;
+        }
+
+        $exprType = $this->visit($ctx->expr());
+        $this->assertAssignable(
+            $type,
+            is_string($exprType) ? $exprType : self::TYPE_UNKNOWN,
+            $token->getLine(),
+            $token->getCharPositionInLine(),
+            "No se puede inicializar constante '$name' de tipo '$type' con valor de tipo '{$exprType}'."
+        );
+
+        return null;
+    }
+
     public function visitAssignment($ctx): mixed
     {
         $identifier = $ctx->IDENTIFIER();
@@ -160,6 +197,16 @@ final class AnalizadorSemantico extends GolampiBaseVisitor
         if ($resolved === null) {
             $this->addSemanticError(
                 "Variable '$name' usada sin declaracion previa.",
+                $token->getLine(),
+                $token->getCharPositionInLine()
+            );
+            $this->visit($ctx->expr());
+            return self::TYPE_ERROR;
+        }
+
+        if (($resolved['kind'] ?? '') === 'constante') {
+            $this->addSemanticError(
+                "Asignacion invalida: '$name' es constante y no puede modificarse.",
                 $token->getLine(),
                 $token->getCharPositionInLine()
             );
@@ -245,12 +292,54 @@ final class AnalizadorSemantico extends GolampiBaseVisitor
         return $resultado;
     }
 
+    public function visitSwitchStmt($ctx): mixed
+    {
+        $tipoControl = $this->visit($ctx->expr());
+        if (!is_string($tipoControl)) {
+            $tipoControl = self::TYPE_UNKNOWN;
+        }
+
+        $this->nivelSwitch++;
+
+        foreach ($ctx->switchCase() as $caso) {
+            $tipoCaso = $this->visit($caso->expr());
+            if (!is_string($tipoCaso)) {
+                $tipoCaso = self::TYPE_UNKNOWN;
+            }
+
+            if (
+                $tipoControl !== self::TYPE_ERROR
+                && $tipoCaso !== self::TYPE_ERROR
+                && !$this->tiposComparablesEnSwitch($tipoControl, $tipoCaso)
+            ) {
+                $this->addSemanticError(
+                    "Caso invalido en switch: tipo '$tipoCaso' no es compatible con '$tipoControl'.",
+                    $caso->expr()->getStart()->getLine(),
+                    $caso->expr()->getStart()->getCharPositionInLine()
+                );
+            }
+
+            foreach ($caso->statement() as $statement) {
+                $this->visit($statement);
+            }
+        }
+
+        if ($ctx->defaultCase() !== null) {
+            foreach ($ctx->defaultCase()->statement() as $statement) {
+                $this->visit($statement);
+            }
+        }
+
+        $this->nivelSwitch--;
+        return null;
+    }
+
     public function visitBreakStmt($ctx): mixed
     {
-        if ($this->nivelBucles <= 0) {
+        if ($this->nivelBucles <= 0 && $this->nivelSwitch <= 0) {
             $token = $ctx->getStart();
             $this->addSemanticError(
-                "Uso invalido de 'break': solo se permite dentro de un bucle.",
+                "Uso invalido de 'break': solo se permite dentro de un bucle o switch.",
                 $token->getLine(),
                 $token->getCharPositionInLine()
             );
@@ -465,6 +554,19 @@ final class AnalizadorSemantico extends GolampiBaseVisitor
     private function isSameType(string $left, string $right): bool
     {
         return $left === $right;
+    }
+
+    private function tiposComparablesEnSwitch(string $tipoControl, string $tipoCaso): bool
+    {
+        if ($tipoControl === self::TYPE_UNKNOWN || $tipoCaso === self::TYPE_UNKNOWN) {
+            return true;
+        }
+
+        if ($this->isSameType($tipoControl, $tipoCaso)) {
+            return true;
+        }
+
+        return $this->isNumericPair($tipoControl, $tipoCaso);
     }
 
     private function promoteNumericType(string $left, string $right): string

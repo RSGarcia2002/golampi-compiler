@@ -28,9 +28,9 @@
 
 ## Fase 4 - Codegen ARM64
 - [ ] Modelo de memoria (stack/heap)
-- [~] Generación de .s por programa (esqueleto con funciones detectadas y salto a `main`)
+- [~] Generación de .s por programa (esqueleto con funciones detectadas, salto a `main` y resumen de control de flujo)
 - [~] Prólogo/epílogo de funciones (base por función emitida)
-- [ ] Labels y saltos para control de flujo
+- [~] Labels y saltos para control de flujo (plantillas base emitidas)
 - [ ] Llamadas a funciones y retorno
 
 ## Fase 5 - GUI y reportes
@@ -40,9 +40,9 @@
 - [~] Visualización/descarga tabla de símbolos (descarga JSON desde frontend)
 
 ## Fase 6 - Validación Linux
-- [ ] Ensamblar y enlazar ARM64 en Linux
-- [ ] Ejecutar con qemu-aarch64
-- [ ] Suite de pruebas de aceptación
+- [~] Ensamblar y enlazar ARM64 en Linux (script listo: `guiones/probar_arm64_linux.sh`)
+- [~] Ejecutar con qemu-aarch64 (script listo, sujeto a toolchain instalada)
+- [~] Suite de pruebas de aceptación (script listo: `guiones/ejecutar_suite_aceptacion.sh`)
 - [ ] Ajustes finales
 
 ## Criterio de "Done" por fase

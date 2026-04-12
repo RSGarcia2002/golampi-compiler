@@ -13,6 +13,7 @@ final class GeneradorARM64
         $totalScopes = count($tablaSimbolos['scopes'] ?? []);
         $lineasFuente = substr_count($codigoFuente, "\n") + 1;
         $funciones = $this->extraerFuncionesUsuario($tablaSimbolos);
+        $flujoControl = $this->detectarFlujoControl($codigoFuente);
 
         $lineas = [
             '.section .text',
@@ -23,6 +24,7 @@ final class GeneradorARM64
             '    // Lineas fuente: ' . $lineasFuente,
             '    // Simbolos: ' . $totalSimbolos . ' | Ambitos: ' . $totalScopes,
             '    // Funciones detectadas: ' . count($funciones),
+            '    // if: ' . $flujoControl['if'] . ' | for: ' . $flujoControl['for'] . ' | switch: ' . $flujoControl['switch'],
             '    bl main',
             '    mov x0, #0',
             '    mov x8, #93',
@@ -38,6 +40,10 @@ final class GeneradorARM64
             $lineas[] = '';
             $lineas[] = $this->bloqueFuncion($funcion);
         }
+
+        $lineas[] = '';
+        $lineas[] = '/* Plantillas de labels/saltos (fase 4 base) */';
+        $lineas = array_merge($lineas, $this->bloquesControlFlujo($flujoControl));
 
         return implode("\n", $lineas) . "\n";
     }
@@ -87,5 +93,63 @@ final class GeneradorARM64
             '    ldp x29, x30, [sp], #16',
             '    ret',
         ]);
+    }
+
+    /**
+     * @return array{if:int,for:int,switch:int}
+     */
+    private function detectarFlujoControl(string $codigoFuente): array
+    {
+        return [
+            'if' => preg_match_all('/\bif\b/', $codigoFuente) ?: 0,
+            'for' => preg_match_all('/\bfor\b/', $codigoFuente) ?: 0,
+            'switch' => preg_match_all('/\bswitch\b/', $codigoFuente) ?: 0,
+        ];
+    }
+
+    /**
+     * @param array{if:int,for:int,switch:int} $flujoControl
+     * @return array<int,string>
+     */
+    private function bloquesControlFlujo(array $flujoControl): array
+    {
+        $lineas = [];
+
+        for ($i = 0; $i < $flujoControl['if']; $i++) {
+            $lineas[] = 'L_if_' . $i . '_cond:';
+            $lineas[] = '    b L_if_' . $i . '_end';
+            $lineas[] = 'L_if_' . $i . '_body:';
+            $lineas[] = '    nop';
+            $lineas[] = 'L_if_' . $i . '_end:';
+            $lineas[] = '    nop';
+            $lineas[] = '';
+        }
+
+        for ($i = 0; $i < $flujoControl['for']; $i++) {
+            $lineas[] = 'L_for_' . $i . '_cond:';
+            $lineas[] = '    b L_for_' . $i . '_end';
+            $lineas[] = 'L_for_' . $i . '_body:';
+            $lineas[] = '    b L_for_' . $i . '_cond';
+            $lineas[] = 'L_for_' . $i . '_end:';
+            $lineas[] = '    nop';
+            $lineas[] = '';
+        }
+
+        for ($i = 0; $i < $flujoControl['switch']; $i++) {
+            $lineas[] = 'L_switch_' . $i . '_case_0:';
+            $lineas[] = '    b L_switch_' . $i . '_end';
+            $lineas[] = 'L_switch_' . $i . '_default:';
+            $lineas[] = '    nop';
+            $lineas[] = 'L_switch_' . $i . '_end:';
+            $lineas[] = '    nop';
+            $lineas[] = '';
+        }
+
+        if ($lineas === []) {
+            $lineas[] = 'L_control_vacio:';
+            $lineas[] = '    nop';
+        }
+
+        return $lineas;
     }
 }

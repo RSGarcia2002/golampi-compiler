@@ -44,7 +44,15 @@ Fase 3 avanzada + Fase 4 base: semántica con control de flujo (`if`, `for`, `sw
    ./guiones/ejecutar_demo_fase2.sh
    ./guiones/ejecutar_demo_fase3.sh
    ```
-6. (Opcional) Levantar interfaz web local:
+6. Ejecutar suite completa local:
+   ```bash
+   ./guiones/ejecutar_suite_aceptacion.sh
+   ```
+7. Probar ensamblado/ejecución ARM64 en Linux (si tienes toolchain):
+   ```bash
+   ./guiones/probar_arm64_linux.sh
+   ```
+8. (Opcional) Levantar interfaz web local:
    ```bash
    php -S 127.0.0.1:8080 -t fuente
    ```

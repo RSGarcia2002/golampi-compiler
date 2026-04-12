@@ -1,0 +1,93 @@
+:root {
+  --fondo: #0f172a;
+  --panel: #111827;
+  --panel-borde: #334155;
+  --texto: #e2e8f0;
+  --muted: #94a3b8;
+  --acento: #0ea5e9;
+  --acento-2: #22c55e;
+}
+
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  font-family: "JetBrains Mono", "Fira Code", monospace;
+  background: radial-gradient(circle at top right, #1e293b 0%, var(--fondo) 45%);
+  color: var(--texto);
+}
+
+.contenedor {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 24px;
+  display: grid;
+  gap: 16px;
+}
+
+.encabezado h1 { margin: 0; font-size: 1.8rem; }
+.encabezado p { margin: 4px 0 0; color: var(--muted); }
+
+.panel {
+  background: color-mix(in srgb, var(--panel) 88%, black);
+  border: 1px solid var(--panel-borde);
+  border-radius: 12px;
+  padding: 14px;
+}
+
+.barra, .acciones {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+#editor {
+  width: 100%;
+  min-height: 320px;
+  margin: 10px 0;
+  border: 1px solid var(--panel-borde);
+  border-radius: 10px;
+  background: #020617;
+  color: var(--texto);
+  padding: 12px;
+  font-family: inherit;
+  font-size: 0.95rem;
+  resize: vertical;
+}
+
+button, select {
+  border: 1px solid var(--panel-borde);
+  border-radius: 8px;
+  background: #0b1220;
+  color: var(--texto);
+  padding: 8px 12px;
+  font-family: inherit;
+}
+
+#btn-analizar {
+  border-color: #0369a1;
+  background: linear-gradient(135deg, var(--acento), #0284c7);
+  color: white;
+}
+
+#btn-limpiar {
+  border-color: #15803d;
+  background: linear-gradient(135deg, var(--acento-2), #16a34a);
+  color: white;
+}
+
+#consola {
+  margin: 0;
+  min-height: 220px;
+  border: 1px solid var(--panel-borde);
+  border-radius: 10px;
+  background: #020617;
+  padding: 12px;
+  overflow: auto;
+  white-space: pre-wrap;
+}
+
+@media (max-width: 768px) {
+  .contenedor { padding: 14px; }
+  #editor { min-height: 240px; }
+}

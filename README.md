@@ -44,6 +44,11 @@ Fase 3 en progreso: semántica base completa, control de flujo (`if`, `for`, `sw
    ./guiones/ejecutar_demo_fase2.sh
    ./guiones/ejecutar_demo_fase3.sh
    ```
+6. (Opcional) Levantar interfaz web local:
+   ```bash
+   php -S 127.0.0.1:8080 -t fuente
+   ```
+   Abrir en navegador: `http://127.0.0.1:8080/frontend/`
 
 ## Uso manual del parser
 Entrada por archivo:

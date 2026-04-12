@@ -34,7 +34,7 @@
 - [ ] Llamadas a funciones y retorno
 
 ## Fase 5 - GUI y reportes
-- [ ] Editor, consola, barra de acciones
+- [~] Editor, consola, barra de acciones (UI base implementada)
 - [ ] Visualización/descarga ASM
 - [ ] Visualización/descarga errores
 - [ ] Visualización/descarga tabla de símbolos

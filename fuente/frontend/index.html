@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Golampi Compiler</title>
+  <link rel="stylesheet" href="./estilos.css" />
+</head>
+<body>
+  <main class="contenedor">
+    <header class="encabezado">
+      <h1>Golampi Compiler</h1>
+      <p>Editor y análisis léxico/sintáctico/semántico</p>
+    </header>
+
+    <section class="panel editor-panel">
+      <div class="barra">
+        <label for="selector-ejemplo">Ejemplo:</label>
+        <select id="selector-ejemplo">
+          <option value="">Seleccionar...</option>
+          <option value="fase1_ok">Fase 1 OK</option>
+          <option value="fase2_error_semantico">Fase 2 Error Semántico</option>
+          <option value="fase3_funciones_ok">Fase 3 Funciones OK</option>
+        </select>
+        <button id="btn-cargar" type="button">Cargar Ejemplo</button>
+      </div>
+      <textarea id="editor" spellcheck="false">package main
+
+func main() {
+  var x int = 1;
+  fmt.Println(x);
+}
+</textarea>
+      <div class="acciones">
+        <button id="btn-analizar" type="button">Analizar</button>
+        <button id="btn-limpiar" type="button">Limpiar Consola</button>
+      </div>
+    </section>
+
+    <section class="panel consola-panel">
+      <h2>Consola</h2>
+      <pre id="consola">Listo para analizar...</pre>
+    </section>
+  </main>
+
+  <script src="./app.js" type="module"></script>
+</body>
+</html>

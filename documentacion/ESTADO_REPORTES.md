@@ -33,3 +33,4 @@
 - Nuevos soportes Fase 3: `switch` con validación de tipos en `case`, y `const` con prohibición de reasignación.
 - Funciones activas: parámetros tipados, llamadas con validación de aridad/tipos, retorno simple tipado.
 - Built-ins activos: `fmt.Println`, `len`, `typeOf`.
+- GUI base activa en `fuente/frontend/` con editor, consola y acción de análisis vía `fetch` al backend.

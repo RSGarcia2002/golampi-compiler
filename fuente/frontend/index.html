@@ -10,50 +10,53 @@
   <main class="contenedor">
     <header class="encabezado">
       <h1>Golampi Compiler</h1>
-      <p>Editor y análisis léxico/sintáctico/semántico</p>
+      <div class="toolbar">
+        <button id="btn-nuevo" type="button" class="btn btn-azul">Nuevo</button>
+        <button id="btn-cargar" type="button" class="btn">Cargar</button>
+        <button id="btn-guardar" type="button" class="btn">Guardar</button>
+        <button id="btn-compilar" type="button" class="btn btn-verde">Compilar</button>
+        <button id="btn-limpiar" type="button" class="btn btn-rojo">Limpiar Consola</button>
+      </div>
     </header>
 
-    <section class="panel editor-panel">
-      <div class="barra">
-        <label for="selector-ejemplo">Ejemplo:</label>
-        <select id="selector-ejemplo">
-          <option value="">Seleccionar...</option>
-          <option value="fase1_ok">Fase 1 OK</option>
-          <option value="fase2_error_semantico">Fase 2 Error Semántico</option>
-          <option value="fase3_funciones_ok">Fase 3 Funciones OK</option>
-          <option value="fase3_arreglos_builtins_ok">Fase 3 Arreglos/Built-ins OK</option>
-          <option value="fase3_arreglos_builtins_error">Fase 3 Arreglos/Built-ins Error</option>
-        </select>
-        <button id="btn-cargar" type="button">Cargar Ejemplo</button>
-      </div>
-      <textarea id="editor" spellcheck="false">package main
+    <section class="layout">
+      <article class="panel principal">
+        <h2>Editor de Código - Golampi</h2>
+        <textarea id="editor" spellcheck="false">func main() {
+  a := 1
+  b := a + 2
+  println(b)
+}</textarea>
 
-func main() {
-  var x int = 1;
-  fmt.Println(x);
-}
-</textarea>
-      <div class="acciones">
-        <button id="btn-analizar" type="button">Analizar</button>
-        <button id="btn-limpiar" type="button">Limpiar Consola</button>
-      </div>
-    </section>
+        <h2>Consola - Código ARM64 Generado</h2>
+        <pre id="consola">Compila para ver el código ARM64 generado...</pre>
+      </article>
 
-    <section class="panel consola-panel">
-      <h2>Consola</h2>
-      <pre id="consola">Listo para analizar...</pre>
-    </section>
-
-    <section class="panel artefactos-panel">
-      <h2>Artefactos</h2>
-      <p id="resumen">Sin análisis ejecutado.</p>
-      <div class="acciones">
-        <button id="btn-descargar-errores" type="button">Descargar Errores</button>
-        <button id="btn-descargar-tabla" type="button">Descargar Tabla</button>
-        <button id="btn-descargar-asm" type="button">Descargar ASM</button>
-      </div>
+      <aside class="panel lateral">
+        <h2>Reportes</h2>
+        <p id="resumen">Sin análisis ejecutado.</p>
+        <div class="acciones-lateral">
+          <button id="btn-ver-errores" type="button" class="btn btn-alerta">Ver Errores</button>
+          <button id="btn-ver-tabla" type="button" class="btn btn-ambar">Ver Tabla de Símbolos</button>
+          <button id="btn-descargar-asm" type="button" class="btn btn-cian">Descargar ARM64</button>
+        </div>
+      </aside>
     </section>
   </main>
+
+  <input id="input-cargar-archivo" type="file" accept=".gol,.txt" hidden />
+
+  <dialog id="modal-errores" class="modal">
+    <h3>Errores</h3>
+    <pre id="contenido-errores">Sin datos.</pre>
+    <button id="btn-cerrar-errores" type="button" class="btn">Cerrar</button>
+  </dialog>
+
+  <dialog id="modal-tabla" class="modal">
+    <h3>Tabla de Símbolos</h3>
+    <pre id="contenido-tabla">Sin datos.</pre>
+    <button id="btn-cerrar-tabla" type="button" class="btn">Cerrar</button>
+  </dialog>
 
   <script src="./app.js" type="module"></script>
 </body>

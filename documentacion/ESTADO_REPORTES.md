@@ -36,5 +36,5 @@
 - Funciones activas: parámetros tipados, llamadas con validación de aridad/tipos, retorno simple tipado.
 - Built-ins activos: `fmt.Println`, `len`, `now`, `substr`, `typeOf`.
 - Arreglos: soporte semántico para tipos `[]T` y literales (`[1,2,3]`) con validación de homogeneidad.
-- GUI activa en `fuente/frontend/` con editor, consola, resumen de análisis y descargas directas de errores, tabla de símbolos y ASM.
+- GUI activa en `fuente/frontend/` con estilo de panel (editor + consola ARM64), botones de reportes (`Ver Errores`, `Ver Tabla de Símbolos`, `Descargar ARM64`) y modales de visualización.
 - Scripts Linux: `guiones/probar_arm64_linux.sh` y `guiones/ejecutar_suite_aceptacion.sh` para validación de ensamblado/ejecución ARM64 con QEMU.

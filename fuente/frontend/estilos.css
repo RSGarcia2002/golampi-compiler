@@ -1,104 +1,181 @@
 :root {
-  --fondo: #0f172a;
-  --panel: #111827;
-  --panel-borde: #334155;
-  --texto: #e2e8f0;
-  --muted: #94a3b8;
-  --acento: #0ea5e9;
-  --acento-2: #22c55e;
+  --fondo: #f1f3f7;
+  --panel: #ffffff;
+  --borde: #e3e6ed;
+  --titulo: #2f3b4a;
+  --texto: #4b5565;
+  --editor-bg: #2d3648;
+  --editor-texto: #dbe5f3;
 }
 
-* { box-sizing: border-box; }
+* {
+  box-sizing: border-box;
+}
+
 body {
   margin: 0;
-  font-family: "JetBrains Mono", "Fira Code", monospace;
-  background: radial-gradient(circle at top right, #1e293b 0%, var(--fondo) 45%);
+  font-family: 'Segoe UI', Tahoma, sans-serif;
+  background: var(--fondo);
   color: var(--texto);
 }
 
 .contenedor {
-  max-width: 1100px;
-  margin: 0 auto;
-  padding: 24px;
-  display: grid;
-  gap: 16px;
+  max-width: 1280px;
+  margin: 28px auto;
+  padding: 0 16px;
 }
 
-.encabezado h1 { margin: 0; font-size: 1.8rem; }
-.encabezado p { margin: 4px 0 0; color: var(--muted); }
-
-.panel {
-  background: color-mix(in srgb, var(--panel) 88%, black);
-  border: 1px solid var(--panel-borde);
-  border-radius: 12px;
-  padding: 14px;
+.encabezado {
+  background: var(--panel);
+  border: 1px solid var(--borde);
+  border-radius: 10px;
+  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
 }
 
-.barra, .acciones {
+.encabezado h1 {
+  margin: 0;
+  font-size: 1.9rem;
+  color: #3e5b8f;
+}
+
+.toolbar {
   display: flex;
   gap: 8px;
-  align-items: center;
   flex-wrap: wrap;
 }
 
-#editor {
-  width: 100%;
-  min-height: 320px;
-  margin: 10px 0;
-  border: 1px solid var(--panel-borde);
-  border-radius: 10px;
-  background: #020617;
-  color: var(--texto);
-  padding: 12px;
-  font-family: inherit;
-  font-size: 0.95rem;
-  resize: vertical;
-}
-
-button, select {
-  border: 1px solid var(--panel-borde);
-  border-radius: 8px;
-  background: #0b1220;
-  color: var(--texto);
+.btn {
+  border: 1px solid #d7dbe3;
+  border-radius: 7px;
+  background: #eceff5;
+  color: #495468;
+  font-weight: 600;
+  font-size: 0.9rem;
   padding: 8px 12px;
-  font-family: inherit;
+  cursor: pointer;
 }
 
-#btn-analizar {
-  border-color: #0369a1;
-  background: linear-gradient(135deg, var(--acento), #0284c7);
-  color: white;
+.btn-azul {
+  background: #d9e9fb;
 }
 
-#btn-limpiar {
-  border-color: #15803d;
-  background: linear-gradient(135deg, var(--acento-2), #16a34a);
-  color: white;
+.btn-verde {
+  background: #d9efdd;
 }
 
-#btn-descargar-errores,
-#btn-descargar-tabla,
-#btn-descargar-asm {
-  border-color: #475569;
+.btn-rojo {
+  background: #f5dcdc;
 }
 
-#resumen {
-  margin: 0 0 12px;
-  color: var(--muted);
+.btn-alerta {
+  background: #f6dada;
+  color: #8d4f4f;
+}
+
+.btn-ambar {
+  background: #f5ebd8;
+  color: #7a683e;
+}
+
+.btn-cian {
+  background: #d8ecef;
+  color: #416e76;
+}
+
+.layout {
+  margin-top: 14px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 290px;
+  gap: 14px;
+}
+
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--borde);
+  border-radius: 10px;
+  padding: 14px;
+}
+
+.principal h2,
+.lateral h2 {
+  margin: 2px 0 10px;
+  font-size: 1.45rem;
+  color: var(--titulo);
+}
+
+#editor,
+#consola {
+  width: 100%;
+  border: 1px solid #414d63;
+  border-radius: 8px;
+  background: var(--editor-bg);
+  color: var(--editor-texto);
+  font-family: 'Fira Code', Consolas, monospace;
+  font-size: 0.95rem;
+  line-height: 1.45;
+  padding: 12px;
+}
+
+#editor {
+  min-height: 240px;
+  resize: vertical;
+  margin-bottom: 12px;
 }
 
 #consola {
+  min-height: 175px;
   margin: 0;
-  min-height: 220px;
-  border: 1px solid var(--panel-borde);
-  border-radius: 10px;
-  background: #020617;
-  padding: 12px;
   overflow: auto;
   white-space: pre-wrap;
 }
 
-@media (max-width: 768px) {
-  .contenedor { padding: 14px; }
-  #editor { min-height: 240px; }
+#resumen {
+  margin: 0 0 10px;
+  font-size: 0.95rem;
+}
+
+.acciones-lateral {
+  display: grid;
+  gap: 8px;
+}
+
+.modal {
+  border: 1px solid var(--borde);
+  border-radius: 10px;
+  width: min(860px, calc(100vw - 24px));
+  padding: 14px;
+}
+
+.modal::backdrop {
+  background: rgba(0, 0, 0, 0.32);
+}
+
+.modal h3 {
+  margin: 0 0 10px;
+}
+
+.modal pre {
+  background: #f7f8fb;
+  border: 1px solid var(--borde);
+  border-radius: 8px;
+  padding: 10px;
+  max-height: 52vh;
+  overflow: auto;
+  margin: 0 0 12px;
+  white-space: pre-wrap;
+}
+
+@media (max-width: 980px) {
+  .layout {
+    grid-template-columns: 1fr;
+  }
+
+  .encabezado {
+    flex-direction: column;
+    align-items: flex-start;
+  }
 }

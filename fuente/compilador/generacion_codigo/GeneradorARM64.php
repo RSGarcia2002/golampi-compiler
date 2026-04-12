@@ -31,6 +31,17 @@ final class GeneradorARM64 extends GolampiBaseVisitor
 
     private bool $usaHeap = false;
 
+    /** @var array<string,string> */
+    private array $etiquetaPorString = [];
+
+    /** @var array<string,string> */
+    private array $stringPorEtiqueta = [];
+
+    /** @var array<string,string> */
+    private array $valoresStringConocidos = [];
+
+    private int $contadorStrings = 0;
+
     /**
      * @param array<string,mixed> $tablaSimbolos
      */
@@ -38,6 +49,10 @@ final class GeneradorARM64 extends GolampiBaseVisitor
     {
         $this->lineas = [];
         $this->usaHeap = false;
+        $this->etiquetaPorString = [];
+        $this->stringPorEtiqueta = [];
+        $this->valoresStringConocidos = [];
+        $this->contadorStrings = 0;
 
         $totalSimbolos = count($tablaSimbolos['symbols'] ?? []);
         $totalScopes = count($tablaSimbolos['scopes'] ?? []);
@@ -121,6 +136,7 @@ final class GeneradorARM64 extends GolampiBaseVisitor
         $this->pilaControl = [];
         $this->longitudesConocidas = [];
         $this->tiposVariables = [];
+        $this->valoresStringConocidos = [];
 
         $this->emit('.global ' . $nombre);
         $this->emit($nombre . ':');
@@ -237,6 +253,11 @@ final class GeneradorARM64 extends GolampiBaseVisitor
             if ($len !== null) {
                 $this->longitudesConocidas[$nombre] = $len;
             }
+
+            $stringConst = $this->resolverStringConstante($ctx->expr());
+            if ($stringConst !== null) {
+                $this->valoresStringConocidos[$nombre] = $stringConst;
+            }
             return null;
         }
 
@@ -264,6 +285,13 @@ final class GeneradorARM64 extends GolampiBaseVisitor
             $this->longitudesConocidas[$nombre] = $len;
         } else {
             unset($this->longitudesConocidas[$nombre]);
+        }
+
+        $stringConst = $this->resolverStringConstante($ctx->expr());
+        if ($stringConst !== null) {
+            $this->valoresStringConocidos[$nombre] = $stringConst;
+        } else {
+            unset($this->valoresStringConocidos[$nombre]);
         }
 
         return null;
@@ -534,8 +562,35 @@ final class GeneradorARM64 extends GolampiBaseVisitor
                     return;
                 }
 
-                if (in_array($nombre, ['now', 'substr', 'typeOf'], true)) {
-                    $this->emit('    // builtin ' . $nombre . ' (stub)');
+                if ($nombre === 'now') {
+                    $valor = date(DATE_ATOM);
+                    $etiqueta = $this->registrarLiteralString($valor);
+                    $this->emit('    ldr x0, =' . $etiqueta);
+                    return;
+                }
+
+                if ($nombre === 'typeOf') {
+                    $tipo = isset($args[0]) ? $this->tipoAproximadoExpr($args[0]) : 'unknown';
+                    $etiqueta = $this->registrarLiteralString($tipo);
+                    $this->emit('    ldr x0, =' . $etiqueta);
+                    return;
+                }
+
+                if ($nombre === 'substr') {
+                    if (count($args) === 3) {
+                        $base = $this->resolverStringConstante($args[0]);
+                        $inicio = $this->resolverEnteroConstante($args[1]);
+                        $cantidad = $this->resolverEnteroConstante($args[2]);
+
+                        if ($base !== null && $inicio !== null && $cantidad !== null) {
+                            $recorte = $this->recortarString($base, $inicio, $cantidad);
+                            $etiqueta = $this->registrarLiteralString($recorte);
+                            $this->emit('    ldr x0, =' . $etiqueta);
+                            return;
+                        }
+                    }
+
+                    $this->emit('    // builtin substr (stub)');
                     $this->emit('    mov x0, #0');
                     return;
                 }
@@ -680,7 +735,14 @@ final class GeneradorARM64 extends GolampiBaseVisitor
             return;
         }
 
-        // string/float por ahora como stub para mantener compilación base ARM64.
+        if ($texto !== '' && str_starts_with($texto, '"') && str_ends_with($texto, '"')) {
+            $sinComillas = substr($texto, 1, -1);
+            $etiqueta = $this->registrarLiteralString(stripcslashes($sinComillas));
+            $this->emit('    ldr x0, =' . $etiqueta);
+            return;
+        }
+
+        // float por ahora como stub para mantener compilación base ARM64.
         $this->emit('    mov x0, #0');
     }
 
@@ -754,6 +816,54 @@ final class GeneradorARM64 extends GolampiBaseVisitor
         return null;
     }
 
+    private function resolverStringConstante($exprCtx): ?string
+    {
+        if ($exprCtx === null) {
+            return null;
+        }
+
+        $clase = (new ReflectionClass($exprCtx))->getShortName();
+        if ($clase === 'LiteralExprContext') {
+            $texto = $exprCtx->literal()?->getText() ?? '';
+            if ($texto !== '' && str_starts_with($texto, '"') && str_ends_with($texto, '"')) {
+                return stripcslashes(substr($texto, 1, -1));
+            }
+            return null;
+        }
+
+        if ($clase === 'IdentifierExprContext') {
+            $nombre = $exprCtx->IDENTIFIER()?->getText() ?? '';
+            if ($nombre !== '' && isset($this->valoresStringConocidos[$nombre])) {
+                return $this->valoresStringConocidos[$nombre];
+            }
+            return null;
+        }
+
+        if ($clase === 'CallExprContext') {
+            $nombre = $exprCtx->IDENTIFIER()?->getText() ?? '';
+            $args = $exprCtx->argList()?->expr() ?? [];
+
+            if ($nombre === 'substr' && count($args) === 3) {
+                $base = $this->resolverStringConstante($args[0]);
+                $inicio = $this->resolverEnteroConstante($args[1]);
+                $cantidad = $this->resolverEnteroConstante($args[2]);
+                if ($base !== null && $inicio !== null && $cantidad !== null) {
+                    return $this->recortarString($base, $inicio, $cantidad);
+                }
+            }
+
+            if ($nombre === 'typeOf' && isset($args[0])) {
+                return $this->tipoAproximadoExpr($args[0]);
+            }
+
+            if ($nombre === 'now') {
+                return date(DATE_ATOM);
+            }
+        }
+
+        return null;
+    }
+
     private function tipoAproximadoExpr($exprCtx): string
     {
         if ($exprCtx === null) {
@@ -776,6 +886,16 @@ final class GeneradorARM64 extends GolampiBaseVisitor
         if ($clase === 'LiteralExprContext') {
             $texto = $exprCtx->literal()?->getText() ?? '';
             if ($texto !== '' && str_starts_with($texto, '"') && str_ends_with($texto, '"')) {
+                return 'string';
+            }
+        }
+
+        if ($clase === 'CallExprContext') {
+            $nombre = $exprCtx->IDENTIFIER()?->getText() ?? '';
+            if ($nombre === 'len') {
+                return 'int';
+            }
+            if (in_array($nombre, ['now', 'substr', 'typeOf'], true)) {
                 return 'string';
             }
         }
@@ -835,20 +955,61 @@ final class GeneradorARM64 extends GolampiBaseVisitor
 
     private function emitRuntimeHelpers(): void
     {
-        if (!$this->usaHeap) {
+        if (!$this->usaHeap && $this->stringPorEtiqueta === []) {
             return;
         }
 
-        $this->emit('');
-        $this->emit('L_panic_oom:');
-        $this->emit('    mov x0, #7');
-        $this->emit('    mov x8, #93');
-        $this->emit('    svc #0');
-        $this->emit('');
-        $this->emit('.section .bss');
-        $this->emit('    .align 3');
-        $this->emit('heap_base:');
-        $this->emit('    .skip 1048576');
-        $this->emit('heap_end:');
+        if ($this->usaHeap) {
+            $this->emit('');
+            $this->emit('L_panic_oom:');
+            $this->emit('    mov x0, #7');
+            $this->emit('    mov x8, #93');
+            $this->emit('    svc #0');
+        }
+
+        if ($this->stringPorEtiqueta !== []) {
+            $this->emit('');
+            $this->emit('.section .rodata');
+            foreach ($this->stringPorEtiqueta as $etiqueta => $valor) {
+                $this->emit($etiqueta . ':');
+                $this->emit('    .asciz "' . $this->escaparAsmString($valor) . '"');
+            }
+        }
+
+        if ($this->usaHeap) {
+            $this->emit('');
+            $this->emit('.section .bss');
+            $this->emit('    .align 3');
+            $this->emit('heap_base:');
+            $this->emit('    .skip 1048576');
+            $this->emit('heap_end:');
+        }
+    }
+
+    private function registrarLiteralString(string $valor): string
+    {
+        if (isset($this->etiquetaPorString[$valor])) {
+            return $this->etiquetaPorString[$valor];
+        }
+
+        $etiqueta = 'L_str_' . $this->contadorStrings;
+        $this->contadorStrings++;
+        $this->etiquetaPorString[$valor] = $etiqueta;
+        $this->stringPorEtiqueta[$etiqueta] = $valor;
+        return $etiqueta;
+    }
+
+    private function escaparAsmString(string $texto): string
+    {
+        return addcslashes($texto, "\\\"\n\r\t");
+    }
+
+    private function recortarString(string $base, int $inicio, int $cantidad): string
+    {
+        if ($inicio < 0 || $cantidad <= 0 || $inicio >= strlen($base)) {
+            return '';
+        }
+
+        return substr($base, $inicio, $cantidad);
     }
 }

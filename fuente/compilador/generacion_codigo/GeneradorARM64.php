@@ -14,6 +14,12 @@ final class GeneradorARM64 extends GolampiBaseVisitor
     private int $contadorSlotsLocales = 0;
     private string $funcionActual = '';
 
+    /** @var array<int, array{cond:string,end:string}> */
+    private array $pilaBucles = [];
+
+    /** @var array<int, string> */
+    private array $pilaSwitchFin = [];
+
     /**
      * @param array<string,mixed> $tablaSimbolos
      */
@@ -175,6 +181,16 @@ final class GeneradorARM64 extends GolampiBaseVisitor
             return;
         }
 
+        if ($statement->breakStmt() !== null) {
+            $this->visitBreakStmt($statement->breakStmt());
+            return;
+        }
+
+        if ($statement->continueStmt() !== null) {
+            $this->visitContinueStmt($statement->continueStmt());
+            return;
+        }
+
         if ($statement->expr() !== null) {
             $this->compilarExprEnX0($statement->expr());
             return;
@@ -275,8 +291,8 @@ final class GeneradorARM64 extends GolampiBaseVisitor
     public function visitForStmt($ctx): mixed
     {
         $etiquetaCond = $this->nuevaEtiqueta('for_cond');
-        $etiquetaBody = $this->nuevaEtiqueta('for_body');
         $etiquetaFin = $this->nuevaEtiqueta('for_fin');
+        $this->pilaBucles[] = ['cond' => $etiquetaCond, 'end' => $etiquetaFin];
 
         $this->emit($etiquetaCond . ':');
         if ($ctx->expr() !== null) {
@@ -285,20 +301,86 @@ final class GeneradorARM64 extends GolampiBaseVisitor
             $this->emit('    beq ' . $etiquetaFin);
         }
 
-        $this->emit($etiquetaBody . ':');
         $this->compilarBloque($ctx->block());
         $this->emit('    b ' . $etiquetaCond);
         $this->emit($etiquetaFin . ':');
+        array_pop($this->pilaBucles);
 
         return null;
     }
 
     public function visitSwitchStmt($ctx): mixed
     {
-        $this->emit('    // switch: implementación base pendiente (emite salto a fin)');
         $etiquetaFin = $this->nuevaEtiqueta('switch_fin');
-        $this->emit('    b ' . $etiquetaFin);
+        $etiquetaDefault = $this->nuevaEtiqueta('switch_default');
+        $casos = $ctx->switchCase();
+        $labelsCasos = [];
+
+        foreach ($casos as $index => $_caso) {
+            $labelsCasos[$index] = $this->nuevaEtiqueta('switch_case_' . $index);
+        }
+
+        $this->pilaSwitchFin[] = $etiquetaFin;
+
+        $this->compilarExprEnX0($ctx->expr());
+        $this->emit('    mov x19, x0');
+
+        foreach ($casos as $index => $caso) {
+            $this->compilarExprEnX0($caso->expr());
+            $this->emit('    cmp x19, x0');
+            $this->emit('    beq ' . $labelsCasos[$index]);
+        }
+
+        if ($ctx->defaultCase() !== null) {
+            $this->emit('    b ' . $etiquetaDefault);
+        } else {
+            $this->emit('    b ' . $etiquetaFin);
+        }
+
+        foreach ($casos as $index => $caso) {
+            $this->emit($labelsCasos[$index] . ':');
+            foreach ($caso->statement() as $statement) {
+                $this->compilarStatement($statement);
+            }
+            $this->emit('    b ' . $etiquetaFin);
+        }
+
+        if ($ctx->defaultCase() !== null) {
+            $this->emit($etiquetaDefault . ':');
+            foreach ($ctx->defaultCase()->statement() as $statement) {
+                $this->compilarStatement($statement);
+            }
+            $this->emit('    b ' . $etiquetaFin);
+        }
+
         $this->emit($etiquetaFin . ':');
+        array_pop($this->pilaSwitchFin);
+
+        return null;
+    }
+
+    public function visitBreakStmt($ctx): mixed
+    {
+        $switchActual = $this->pilaSwitchFin[count($this->pilaSwitchFin) - 1] ?? null;
+        if ($switchActual !== null) {
+            $this->emit('    b ' . $switchActual);
+            return null;
+        }
+
+        $bucleActual = $this->pilaBucles[count($this->pilaBucles) - 1] ?? null;
+        if ($bucleActual !== null) {
+            $this->emit('    b ' . $bucleActual['end']);
+        }
+
+        return null;
+    }
+
+    public function visitContinueStmt($ctx): mixed
+    {
+        $bucleActual = $this->pilaBucles[count($this->pilaBucles) - 1] ?? null;
+        if ($bucleActual !== null) {
+            $this->emit('    b ' . $bucleActual['cond']);
+        }
 
         return null;
     }
@@ -383,7 +465,21 @@ final class GeneradorARM64 extends GolampiBaseVisitor
             }
 
             if ($nombre !== '') {
-                if (in_array($nombre, ['len', 'now', 'substr', 'typeOf'], true)) {
+                if ($nombre === 'len') {
+                    if (isset($args[0])) {
+                        $lenConstante = $this->resolverLenEnCompilacion($args[0]);
+                        if ($lenConstante !== null) {
+                            $this->emit('    ldr x0, =' . $lenConstante);
+                            return;
+                        }
+                    }
+
+                    $this->emit('    // builtin len (stub)');
+                    $this->emit('    mov x0, #0');
+                    return;
+                }
+
+                if (in_array($nombre, ['now', 'substr', 'typeOf'], true)) {
                     $this->emit('    // builtin ' . $nombre . ' (stub)');
                     $this->emit('    mov x0, #0');
                     return;
@@ -511,6 +607,28 @@ final class GeneradorARM64 extends GolampiBaseVisitor
 
         // string/float por ahora como stub para mantener compilación base ARM64.
         $this->emit('    mov x0, #0');
+    }
+
+    private function resolverLenEnCompilacion($exprCtx): ?int
+    {
+        if ($exprCtx === null) {
+            return null;
+        }
+
+        $clase = (new ReflectionClass($exprCtx))->getShortName();
+        if ($clase === 'ArrayLiteralExprContext') {
+            return count($exprCtx->argList()?->expr() ?? []);
+        }
+
+        if ($clase === 'LiteralExprContext') {
+            $texto = $exprCtx->literal()?->getText() ?? '';
+            if ($texto !== '' && str_starts_with($texto, '\"') && str_ends_with($texto, '\"')) {
+                $sinComillas = substr($texto, 1, -1);
+                return strlen(stripcslashes($sinComillas));
+            }
+        }
+
+        return null;
     }
 
     private function reservarSlot(string $nombre): int

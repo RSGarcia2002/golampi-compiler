@@ -24,8 +24,8 @@
 - Estado: Implementado base extendida (Fase 4)
 - Archivo generado: `reportes/programa_fase4.s`
 - Salida actual: `_start` con salto a `main`, funciones compiladas desde AST, stack frame base, variables locales en stack y operaciones enteras.
-- Salida actual (extra): control `if`/`for` con labels/saltos base, llamadas a funciones declaradas y retorno por etiqueta de salida.
-- Pendiente: expansión completa de `switch`, manejo completo de built-ins en runtime y modelo de memoria final.
+- Salida actual (extra): control `if`/`for`/`switch` con labels/saltos base, soporte de `break/continue` en codegen, llamadas a funciones declaradas y retorno por etiqueta de salida.
+- Pendiente: optimización/limpieza de flujo generado, manejo completo de built-ins en runtime y modelo de memoria final.
 
 ## Notas
 - Gramática base creada en `fuente/compilador/gramatica/Golampi.g4`.

@@ -30,7 +30,7 @@
 - [ ] Modelo de memoria (stack/heap)
 - [~] Generación de .s por programa (AST + instrucciones base para declaraciones/asignaciones/expresiones enteras)
 - [~] Prólogo/epílogo de funciones (stack frame fijo base + etiqueta de salida por función)
-- [~] Labels y saltos para control de flujo (`if`/`for` base; `switch` pendiente de expansión)
+- [~] Labels y saltos para control de flujo (`if`/`for`/`switch` base compilados con saltos)
 - [~] Llamadas a funciones y retorno (llamadas básicas + retorno con salto a etiqueta de salida)
 
 ## Fase 5 - GUI y reportes

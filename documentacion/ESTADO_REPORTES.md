@@ -35,4 +35,4 @@
 - Funciones activas: parámetros tipados, llamadas con validación de aridad/tipos, retorno simple tipado.
 - Built-ins activos: `fmt.Println`, `len`, `now`, `substr`, `typeOf`.
 - Arreglos: soporte semántico para tipos `[]T` y literales (`[1,2,3]`) con validación de homogeneidad.
-- GUI base activa en `fuente/frontend/` con editor, consola y acción de análisis vía `fetch` al backend.
+- GUI activa en `fuente/frontend/` con editor, consola, resumen de análisis y descargas directas de errores, tabla de símbolos y ASM.

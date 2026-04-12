@@ -241,13 +241,17 @@ echo json_encode([
     'ok' => count($allErrors) === 0,
     'errors' => $allErrors,
     'semantic_errors' => $semanticErrors,
-    'symbol_table' => [
-        'total_scopes' => $symbolTablePayload['total_scopes'],
-        'total_symbols' => $symbolTablePayload['total_symbols'],
-    ],
+    'symbol_table' => $symbolTablePayload,
     'arm64' => [
         'generado' => $asmGenerado !== null,
         'archivo' => $asmGenerado !== null ? 'reportes/programa_fase4.s' : null,
+        'contenido' => $asmGenerado,
+    ],
+    'reportes' => [
+        'errores' => 'reportes/errores_fase1.json',
+        'errores_semanticos' => 'reportes/errores_semanticos_fase2.json',
+        'tabla_simbolos' => 'reportes/tabla_simbolos_fase2.json',
+        'asm' => $asmGenerado !== null ? 'reportes/programa_fase4.s' : null,
     ],
 ], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE) . PHP_EOL;
 

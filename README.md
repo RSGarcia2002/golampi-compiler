@@ -49,6 +49,7 @@ Fase 3 avanzada + Fase 4 base: semántica con control de flujo (`if`, `for`, `sw
    php -S 127.0.0.1:8080 -t fuente
    ```
    Abrir en navegador: `http://127.0.0.1:8080/frontend/`
+   Incluye: carga de ejemplos, análisis, resumen de estado y descarga de `errores_fase1.json`, `tabla_simbolos_fase2.json` y `programa_fase4.s` cuando aplique.
 
 ## Uso manual del parser
 Entrada por archivo:

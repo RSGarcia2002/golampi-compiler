@@ -21,6 +21,8 @@
           <option value="fase1_ok">Fase 1 OK</option>
           <option value="fase2_error_semantico">Fase 2 Error Semántico</option>
           <option value="fase3_funciones_ok">Fase 3 Funciones OK</option>
+          <option value="fase3_arreglos_builtins_ok">Fase 3 Arreglos/Built-ins OK</option>
+          <option value="fase3_arreglos_builtins_error">Fase 3 Arreglos/Built-ins Error</option>
         </select>
         <button id="btn-cargar" type="button">Cargar Ejemplo</button>
       </div>
@@ -40,6 +42,16 @@ func main() {
     <section class="panel consola-panel">
       <h2>Consola</h2>
       <pre id="consola">Listo para analizar...</pre>
+    </section>
+
+    <section class="panel artefactos-panel">
+      <h2>Artefactos</h2>
+      <p id="resumen">Sin análisis ejecutado.</p>
+      <div class="acciones">
+        <button id="btn-descargar-errores" type="button">Descargar Errores</button>
+        <button id="btn-descargar-tabla" type="button">Descargar Tabla</button>
+        <button id="btn-descargar-asm" type="button">Descargar ASM</button>
+      </div>
     </section>
   </main>
 

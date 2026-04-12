@@ -34,10 +34,10 @@
 - [ ] Llamadas a funciones y retorno
 
 ## Fase 5 - GUI y reportes
-- [~] Editor, consola, barra de acciones (UI base implementada)
-- [ ] Visualización/descarga ASM
-- [ ] Visualización/descarga errores
-- [ ] Visualización/descarga tabla de símbolos
+- [x] Editor, consola, barra de acciones
+- [~] Visualización/descarga ASM (descarga directa desde respuesta backend)
+- [~] Visualización/descarga errores (consola + descarga JSON)
+- [~] Visualización/descarga tabla de símbolos (descarga JSON desde frontend)
 
 ## Fase 6 - Validación Linux
 - [ ] Ensamblar y enlazar ARM64 en Linux

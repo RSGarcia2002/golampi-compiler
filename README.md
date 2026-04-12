@@ -80,9 +80,9 @@ Salida semántica:
 - Validaciones activas: redeclaración en mismo ámbito, uso de identificadores no declarados, tipos en asignaciones/operaciones, contexto válido de `break/continue`, compatibilidad de `case` en `switch`, protección de `const`, aridad/tipos de llamadas y retorno tipado de funciones.
 - Extras Fase 3: validación semántica de arreglos (`[]T` y literales homogéneos) y built-ins `now`/`substr`.
 
-Salida ARM64 (fase inicial):
+Salida ARM64 (fase 4 base avanzada):
 - Archivo: `reportes/programa_fase4.s`
-- Estado: esqueleto generado cuando el análisis no tiene errores, con `_start`, salto a `main`, detección de funciones y prólogo/epílogo base.
+- Estado: generación desde AST cuando el análisis no tiene errores, con `_start`, funciones compiladas, variables locales en stack, operaciones enteras y control básico `if/for`.
 
 ## Flujo de trabajo
 1. Planificar fase.

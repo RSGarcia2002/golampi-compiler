@@ -200,7 +200,7 @@ $allErrors = array_merge($allErrors, $semanticErrors);
 if (count($allErrors) === 0 && file_exists($generadorArm64File)) {
     require_once $generadorArm64File;
     $generador = new GeneradorARM64();
-    $asmGenerado = $generador->generarProgramaBase($sourceCode, $symbolTablePayload);
+    $asmGenerado = $generador->generarProgramaBase($sourceCode, $symbolTablePayload, $tree);
 }
 
 if (!is_dir($reportsDir)) {

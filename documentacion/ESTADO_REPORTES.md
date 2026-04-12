@@ -23,9 +23,9 @@
 ## Código ARM64 (.s)
 - Estado: Implementado base extendida (Fase 4)
 - Archivo generado: `reportes/programa_fase4.s`
-- Salida actual: `_start` con salto a `main`, funciones detectadas desde tabla de símbolos, prólogo/epílogo base por función
-- Salida actual (extra): plantilla de labels/saltos para `if`, `for`, `switch` detectados en el código fuente
-- Salida objetivo pendiente: control de flujo, llamadas reales y manejo de stack/heap
+- Salida actual: `_start` con salto a `main`, funciones compiladas desde AST, stack frame base, variables locales en stack y operaciones enteras.
+- Salida actual (extra): control `if`/`for` con labels/saltos base, llamadas a funciones declaradas y retorno por etiqueta de salida.
+- Pendiente: expansión completa de `switch`, manejo completo de built-ins en runtime y modelo de memoria final.
 
 ## Notas
 - Gramática base creada en `fuente/compilador/gramatica/Golampi.g4`.

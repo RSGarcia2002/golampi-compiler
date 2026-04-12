@@ -2,154 +2,544 @@
 
 declare(strict_types=1);
 
-final class GeneradorARM64
+final class GeneradorARM64 extends GolampiBaseVisitor
 {
+    /** @var array<int,string> */
+    private array $lineas = [];
+
+    /** @var array<string,int> */
+    private array $variablesLocales = [];
+
+    private int $contadorEtiquetas = 0;
+    private int $contadorSlotsLocales = 0;
+    private string $funcionActual = '';
+
     /**
      * @param array<string,mixed> $tablaSimbolos
      */
-    public function generarProgramaBase(string $codigoFuente, array $tablaSimbolos): string
+    public function generarProgramaBase(string $codigoFuente, array $tablaSimbolos, ?object $tree = null): string
     {
+        $this->lineas = [];
+
         $totalSimbolos = count($tablaSimbolos['symbols'] ?? []);
         $totalScopes = count($tablaSimbolos['scopes'] ?? []);
         $lineasFuente = substr_count($codigoFuente, "\n") + 1;
-        $funciones = $this->extraerFuncionesUsuario($tablaSimbolos);
-        $flujoControl = $this->detectarFlujoControl($codigoFuente);
 
-        $lineas = [
-            '.section .text',
-            '.global _start',
-            '',
-            '_start:',
-            '    // Golampi ARM64 (fase 4)',
-            '    // Lineas fuente: ' . $lineasFuente,
-            '    // Simbolos: ' . $totalSimbolos . ' | Ambitos: ' . $totalScopes,
-            '    // Funciones detectadas: ' . count($funciones),
-            '    // if: ' . $flujoControl['if'] . ' | for: ' . $flujoControl['for'] . ' | switch: ' . $flujoControl['switch'],
-            '    bl main',
-            '    mov x0, #0',
-            '    mov x8, #93',
-            '    svc #0',
-            '',
-        ];
+        $this->emit('.section .text');
+        $this->emit('.global _start');
+        $this->emit('');
+        $this->emit('_start:');
+        $this->emit('    // Golampi ARM64 (fase 4 avanzada)');
+        $this->emit('    // Lineas fuente: ' . $lineasFuente);
+        $this->emit('    // Simbolos: ' . $totalSimbolos . ' | Ambitos: ' . $totalScopes);
+        $this->emit('    bl main');
+        $this->emit('    mov x0, #0');
+        $this->emit('    mov x8, #93');
+        $this->emit('    svc #0');
 
-        $lineas[] = $this->bloqueFuncion('main');
-        foreach ($funciones as $funcion) {
-            if ($funcion === 'main') {
-                continue;
-            }
-            $lineas[] = '';
-            $lineas[] = $this->bloqueFuncion($funcion);
+        if ($tree !== null) {
+            $this->visit($tree);
+            return implode("\n", $this->lineas) . "\n";
         }
 
-        $lineas[] = '';
-        $lineas[] = '/* Plantillas de labels/saltos (fase 4 base) */';
-        $lineas = array_merge($lineas, $this->bloquesControlFlujo($flujoControl));
+        $this->emit('');
+        $this->emit('.global main');
+        $this->emit('main:');
+        $this->emit('    stp x29, x30, [sp, #-16]!');
+        $this->emit('    mov x29, sp');
+        $this->emit('    sub sp, sp, #256');
+        $this->emit('    // TODO: generar desde AST');
+        $this->emit('    add sp, sp, #256');
+        $this->emit('    ldp x29, x30, [sp], #16');
+        $this->emit('    ret');
 
-        return implode("\n", $lineas) . "\n";
+        return implode("\n", $this->lineas) . "\n";
     }
 
-    /**
-     * @param array<string,mixed> $tablaSimbolos
-     * @return array<int,string>
-     */
-    private function extraerFuncionesUsuario(array $tablaSimbolos): array
+    public function visitProgram($ctx): mixed
     {
-        $simbolos = $tablaSimbolos['symbols'] ?? [];
-        if (!is_array($simbolos)) {
-            return [];
+        $this->visit($ctx->mainFunction());
+
+        foreach ($ctx->functionDecl() as $funcionCtx) {
+            $this->visit($funcionCtx);
         }
 
-        $funciones = [];
-        foreach ($simbolos as $simbolo) {
-            if (!is_array($simbolo)) {
-                continue;
-            }
-
-            $kind = (string) ($simbolo['kind'] ?? '');
-            if ($kind !== 'function') {
-                continue;
-            }
-
-            $nombre = (string) ($simbolo['name'] ?? '');
-            if ($nombre === '') {
-                continue;
-            }
-
-            $funciones[$nombre] = true;
-        }
-
-        return array_keys($funciones);
+        return null;
     }
 
-    private function bloqueFuncion(string $nombre): string
+    public function visitMainFunction($ctx): mixed
     {
-        return implode("\n", [
-            '.global ' . $nombre,
-            $nombre . ':',
-            '    stp x29, x30, [sp, #-16]!',
-            '    mov x29, sp',
-            "    // TODO: cuerpo de funcion '$nombre'",
-            '    mov x0, #0',
-            '    ldp x29, x30, [sp], #16',
-            '    ret',
-        ]);
+        $this->emit('');
+        $this->iniciarFuncion('main', null);
+        $this->compilarBloque($ctx->block());
+        $this->cerrarFuncion();
+
+        return null;
     }
 
-    /**
-     * @return array{if:int,for:int,switch:int}
-     */
-    private function detectarFlujoControl(string $codigoFuente): array
+    public function visitFunctionDecl($ctx): mixed
     {
-        return [
-            'if' => preg_match_all('/\bif\b/', $codigoFuente) ?: 0,
-            'for' => preg_match_all('/\bfor\b/', $codigoFuente) ?: 0,
-            'switch' => preg_match_all('/\bswitch\b/', $codigoFuente) ?: 0,
-        ];
+        $nombre = $ctx->IDENTIFIER()?->getText() ?? 'funcion_sin_nombre';
+
+        $this->emit('');
+        $this->iniciarFuncion($nombre, $ctx->paramList());
+        $this->compilarBloque($ctx->block());
+        $this->cerrarFuncion();
+
+        return null;
     }
 
-    /**
-     * @param array{if:int,for:int,switch:int} $flujoControl
-     * @return array<int,string>
-     */
-    private function bloquesControlFlujo(array $flujoControl): array
+    private function iniciarFuncion(string $nombre, $paramListCtx): void
     {
-        $lineas = [];
+        $this->funcionActual = $nombre;
+        $this->variablesLocales = [];
+        $this->contadorSlotsLocales = 0;
 
-        for ($i = 0; $i < $flujoControl['if']; $i++) {
-            $lineas[] = 'L_if_' . $i . '_cond:';
-            $lineas[] = '    b L_if_' . $i . '_end';
-            $lineas[] = 'L_if_' . $i . '_body:';
-            $lineas[] = '    nop';
-            $lineas[] = 'L_if_' . $i . '_end:';
-            $lineas[] = '    nop';
-            $lineas[] = '';
+        $this->emit('.global ' . $nombre);
+        $this->emit($nombre . ':');
+        $this->emit('    stp x29, x30, [sp, #-16]!');
+        $this->emit('    mov x29, sp');
+        $this->emit('    sub sp, sp, #256');
+
+        if ($paramListCtx === null) {
+            return;
         }
 
-        for ($i = 0; $i < $flujoControl['for']; $i++) {
-            $lineas[] = 'L_for_' . $i . '_cond:';
-            $lineas[] = '    b L_for_' . $i . '_end';
-            $lineas[] = 'L_for_' . $i . '_body:';
-            $lineas[] = '    b L_for_' . $i . '_cond';
-            $lineas[] = 'L_for_' . $i . '_end:';
-            $lineas[] = '    nop';
-            $lineas[] = '';
+        $parametros = $paramListCtx->param();
+        foreach ($parametros as $indice => $param) {
+            if ($indice > 7) {
+                break;
+            }
+
+            $nombreParam = $param->IDENTIFIER()?->getText() ?? ('param' . $indice);
+            $offset = $this->reservarSlot($nombreParam);
+            $this->emit('    str x' . $indice . ', [x29, #' . $offset . ']');
+        }
+    }
+
+    private function cerrarFuncion(): void
+    {
+        $etiquetaSalida = $this->etiquetaSalidaFuncion($this->funcionActual);
+
+        $this->emit($etiquetaSalida . ':');
+        $this->emit('    add sp, sp, #256');
+        $this->emit('    ldp x29, x30, [sp], #16');
+        $this->emit('    ret');
+    }
+
+    private function compilarBloque($blockCtx): void
+    {
+        if ($blockCtx === null) {
+            return;
         }
 
-        for ($i = 0; $i < $flujoControl['switch']; $i++) {
-            $lineas[] = 'L_switch_' . $i . '_case_0:';
-            $lineas[] = '    b L_switch_' . $i . '_end';
-            $lineas[] = 'L_switch_' . $i . '_default:';
-            $lineas[] = '    nop';
-            $lineas[] = 'L_switch_' . $i . '_end:';
-            $lineas[] = '    nop';
-            $lineas[] = '';
+        foreach ($blockCtx->statement() as $statement) {
+            $this->compilarStatement($statement);
+        }
+    }
+
+    private function compilarStatement($statement): void
+    {
+        if ($statement->varDecl() !== null) {
+            $this->visitVarDecl($statement->varDecl());
+            return;
         }
 
-        if ($lineas === []) {
-            $lineas[] = 'L_control_vacio:';
-            $lineas[] = '    nop';
+        if ($statement->assignment() !== null) {
+            $this->visitAssignment($statement->assignment());
+            return;
         }
 
-        return $lineas;
+        if ($statement->returnStmt() !== null) {
+            $this->visitReturnStmt($statement->returnStmt());
+            return;
+        }
+
+        if ($statement->printStmt() !== null) {
+            $this->visitPrintStmt($statement->printStmt());
+            return;
+        }
+
+        if ($statement->ifStmt() !== null) {
+            $this->visitIfStmt($statement->ifStmt());
+            return;
+        }
+
+        if ($statement->forStmt() !== null) {
+            $this->visitForStmt($statement->forStmt());
+            return;
+        }
+
+        if ($statement->switchStmt() !== null) {
+            $this->visitSwitchStmt($statement->switchStmt());
+            return;
+        }
+
+        if ($statement->expr() !== null) {
+            $this->compilarExprEnX0($statement->expr());
+            return;
+        }
+
+        if ($statement->block() !== null) {
+            $this->compilarBloque($statement->block());
+        }
+    }
+
+    public function visitVarDecl($ctx): mixed
+    {
+        $nombre = $ctx->IDENTIFIER()?->getText() ?? 'tmp';
+        $offset = $this->reservarSlot($nombre);
+
+        if ($ctx->expr() !== null) {
+            $this->compilarExprEnX0($ctx->expr());
+            $this->emit('    str x0, [x29, #' . $offset . ']');
+            return null;
+        }
+
+        $this->emit('    mov x0, #0');
+        $this->emit('    str x0, [x29, #' . $offset . ']');
+        return null;
+    }
+
+    public function visitAssignment($ctx): mixed
+    {
+        $nombre = $ctx->IDENTIFIER()?->getText() ?? '';
+        if ($nombre === '') {
+            return null;
+        }
+
+        if (!isset($this->variablesLocales[$nombre])) {
+            $this->variablesLocales[$nombre] = $this->reservarSlot($nombre);
+        }
+
+        $this->compilarExprEnX0($ctx->expr());
+        $this->emit('    str x0, [x29, #' . $this->variablesLocales[$nombre] . ']');
+
+        return null;
+    }
+
+    public function visitReturnStmt($ctx): mixed
+    {
+        if ($ctx->expr() !== null) {
+            $this->compilarExprEnX0($ctx->expr());
+        }
+
+        $this->emit('    b ' . $this->etiquetaSalidaFuncion($this->funcionActual));
+        return null;
+    }
+
+    public function visitPrintStmt($ctx): mixed
+    {
+        if ($ctx->argList() === null) {
+            return null;
+        }
+
+        $argumentos = $ctx->argList()->expr();
+        if ($argumentos === []) {
+            return null;
+        }
+
+        // Por ahora dejamos el último valor evaluado en x0 como salida de depuración.
+        $ultimo = end($argumentos);
+        if ($ultimo !== false) {
+            $this->compilarExprEnX0($ultimo);
+        }
+
+        return null;
+    }
+
+    public function visitIfStmt($ctx): mixed
+    {
+        $etiquetaElse = $this->nuevaEtiqueta('if_else');
+        $etiquetaFin = $this->nuevaEtiqueta('if_fin');
+
+        $this->compilarExprEnX0($ctx->expr());
+        $this->emit('    cmp x0, #0');
+        $this->emit('    beq ' . $etiquetaElse);
+
+        $bloques = $ctx->block();
+        $this->compilarBloque($bloques[0] ?? null);
+        $this->emit('    b ' . $etiquetaFin);
+
+        $this->emit($etiquetaElse . ':');
+        if (isset($bloques[1])) {
+            $this->compilarBloque($bloques[1]);
+        } elseif ($ctx->ifStmt() !== null) {
+            $this->visitIfStmt($ctx->ifStmt());
+        }
+
+        $this->emit($etiquetaFin . ':');
+        return null;
+    }
+
+    public function visitForStmt($ctx): mixed
+    {
+        $etiquetaCond = $this->nuevaEtiqueta('for_cond');
+        $etiquetaBody = $this->nuevaEtiqueta('for_body');
+        $etiquetaFin = $this->nuevaEtiqueta('for_fin');
+
+        $this->emit($etiquetaCond . ':');
+        if ($ctx->expr() !== null) {
+            $this->compilarExprEnX0($ctx->expr());
+            $this->emit('    cmp x0, #0');
+            $this->emit('    beq ' . $etiquetaFin);
+        }
+
+        $this->emit($etiquetaBody . ':');
+        $this->compilarBloque($ctx->block());
+        $this->emit('    b ' . $etiquetaCond);
+        $this->emit($etiquetaFin . ':');
+
+        return null;
+    }
+
+    public function visitSwitchStmt($ctx): mixed
+    {
+        $this->emit('    // switch: implementación base pendiente (emite salto a fin)');
+        $etiquetaFin = $this->nuevaEtiqueta('switch_fin');
+        $this->emit('    b ' . $etiquetaFin);
+        $this->emit($etiquetaFin . ':');
+
+        return null;
+    }
+
+    private function compilarExprEnX0($exprCtx): void
+    {
+        if ($exprCtx === null) {
+            $this->emit('    mov x0, #0');
+            return;
+        }
+
+        $clase = (new ReflectionClass($exprCtx))->getShortName();
+
+        if ($clase === 'LiteralExprContext') {
+            $texto = $exprCtx->literal()?->getText() ?? '0';
+            $this->emitLiteralEnX0($texto);
+            return;
+        }
+
+        if ($clase === 'IdentifierExprContext') {
+            $nombre = $exprCtx->IDENTIFIER()?->getText() ?? '';
+            if ($nombre !== '' && isset($this->variablesLocales[$nombre])) {
+                $this->emit('    ldr x0, [x29, #' . $this->variablesLocales[$nombre] . ']');
+            } else {
+                $this->emit('    mov x0, #0');
+            }
+            return;
+        }
+
+        if ($clase === 'GroupedExprContext') {
+            $this->compilarExprEnX0($exprCtx->expr());
+            return;
+        }
+
+        if ($clase === 'UnaryExprContext') {
+            $operador = $exprCtx->children[0]?->getText() ?? '';
+            $this->compilarExprEnX0($exprCtx->expr());
+
+            if ($operador === '-') {
+                $this->emit('    neg x0, x0');
+                return;
+            }
+
+            if ($operador === '!') {
+                $this->emit('    cmp x0, #0');
+                $this->emit('    cset x0, eq');
+                return;
+            }
+
+            return;
+        }
+
+        if ($clase === 'BinaryExprContext') {
+            $izquierda = $exprCtx->expr(0);
+            $derecha = $exprCtx->expr(1);
+            $operador = $exprCtx->children[1]?->getText() ?? '';
+
+            $this->compilarExprEnX0($izquierda);
+            $this->emit('    sub sp, sp, #16');
+            $this->emit('    str x0, [sp, #8]');
+
+            $this->compilarExprEnX0($derecha);
+            $this->emit('    ldr x1, [sp, #8]');
+            $this->emit('    add sp, sp, #16');
+
+            $this->emitOperacionBinaria($operador);
+            return;
+        }
+
+        if ($clase === 'CallExprContext') {
+            $nombre = $exprCtx->IDENTIFIER()?->getText() ?? '';
+            $args = $exprCtx->argList()?->expr() ?? [];
+
+            foreach ($args as $i => $arg) {
+                if ($i > 7) {
+                    break;
+                }
+                $this->compilarExprEnX0($arg);
+                if ($i > 0) {
+                    $this->emit('    mov x' . $i . ', x0');
+                }
+            }
+
+            if ($nombre !== '') {
+                if (in_array($nombre, ['len', 'now', 'substr', 'typeOf'], true)) {
+                    $this->emit('    // builtin ' . $nombre . ' (stub)');
+                    $this->emit('    mov x0, #0');
+                    return;
+                }
+
+                $this->emit('    bl ' . $nombre);
+                return;
+            }
+
+            $this->emit('    mov x0, #0');
+            return;
+        }
+
+        if ($clase === 'ArrayLiteralExprContext') {
+            $cantidad = count($exprCtx->argList()?->expr() ?? []);
+            $this->emit('    mov x0, #' . $cantidad);
+            return;
+        }
+
+        $this->emit('    mov x0, #0');
+    }
+
+    private function emitOperacionBinaria(string $operador): void
+    {
+        if ($operador === '+') {
+            $this->emit('    add x0, x1, x0');
+            return;
+        }
+
+        if ($operador === '-') {
+            $this->emit('    sub x0, x1, x0');
+            return;
+        }
+
+        if ($operador === '*') {
+            $this->emit('    mul x0, x1, x0');
+            return;
+        }
+
+        if ($operador === '/') {
+            $this->emit('    sdiv x0, x1, x0');
+            return;
+        }
+
+        if ($operador === '%') {
+            $this->emit('    sdiv x2, x1, x0');
+            $this->emit('    msub x0, x2, x0, x1');
+            return;
+        }
+
+        if ($operador === '==') {
+            $this->emit('    cmp x1, x0');
+            $this->emit('    cset x0, eq');
+            return;
+        }
+
+        if ($operador === '!=') {
+            $this->emit('    cmp x1, x0');
+            $this->emit('    cset x0, ne');
+            return;
+        }
+
+        if ($operador === '<') {
+            $this->emit('    cmp x1, x0');
+            $this->emit('    cset x0, lt');
+            return;
+        }
+
+        if ($operador === '<=') {
+            $this->emit('    cmp x1, x0');
+            $this->emit('    cset x0, le');
+            return;
+        }
+
+        if ($operador === '>') {
+            $this->emit('    cmp x1, x0');
+            $this->emit('    cset x0, gt');
+            return;
+        }
+
+        if ($operador === '>=') {
+            $this->emit('    cmp x1, x0');
+            $this->emit('    cset x0, ge');
+            return;
+        }
+
+        if ($operador === '&&') {
+            $this->emit('    cmp x1, #0');
+            $this->emit('    cset x1, ne');
+            $this->emit('    cmp x0, #0');
+            $this->emit('    cset x0, ne');
+            $this->emit('    and x0, x1, x0');
+            return;
+        }
+
+        if ($operador === '||') {
+            $this->emit('    cmp x1, #0');
+            $this->emit('    cset x1, ne');
+            $this->emit('    cmp x0, #0');
+            $this->emit('    cset x0, ne');
+            $this->emit('    orr x0, x1, x0');
+            return;
+        }
+
+        $this->emit('    // operador no soportado: ' . $operador);
+        $this->emit('    mov x0, #0');
+    }
+
+    private function emitLiteralEnX0(string $texto): void
+    {
+        if (preg_match('/^-?\d+$/', $texto) === 1) {
+            $this->emit('    ldr x0, =' . $texto);
+            return;
+        }
+
+        if ($texto === 'true') {
+            $this->emit('    mov x0, #1');
+            return;
+        }
+
+        if ($texto === 'false' || $texto === 'nil') {
+            $this->emit('    mov x0, #0');
+            return;
+        }
+
+        // string/float por ahora como stub para mantener compilación base ARM64.
+        $this->emit('    mov x0, #0');
+    }
+
+    private function reservarSlot(string $nombre): int
+    {
+        if (isset($this->variablesLocales[$nombre])) {
+            return $this->variablesLocales[$nombre];
+        }
+
+        $this->contadorSlotsLocales++;
+        $offset = -8 * $this->contadorSlotsLocales;
+        $this->variablesLocales[$nombre] = $offset;
+
+        return $offset;
+    }
+
+    private function etiquetaSalidaFuncion(string $nombreFuncion): string
+    {
+        return 'L_' . $nombreFuncion . '_salida';
+    }
+
+    private function nuevaEtiqueta(string $prefijo): string
+    {
+        $etiqueta = 'L_' . $prefijo . '_' . $this->contadorEtiquetas;
+        $this->contadorEtiquetas++;
+        return $etiqueta;
+    }
+
+    private function emit(string $linea): void
+    {
+        $this->lineas[] = $linea;
     }
 }

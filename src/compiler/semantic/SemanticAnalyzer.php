@@ -48,16 +48,16 @@ final class SemanticAnalyzer extends GolampiBaseVisitor
         $declared = $this->symbolTable->declare(
             $name,
             'function',
-            $token->line,
-            $token->charPositionInLine,
+            $token->getLine(),
+            $token->getCharPositionInLine(),
             'function'
         );
 
         if (!$declared) {
             $this->addSemanticError(
                 "Redeclaracion de funcion '$name' en el mismo ambito.",
-                $token->line,
-                $token->charPositionInLine
+                $token->getLine(),
+                $token->getCharPositionInLine()
             );
         }
 
@@ -70,16 +70,16 @@ final class SemanticAnalyzer extends GolampiBaseVisitor
         $declared = $this->symbolTable->declare(
             'main',
             'function',
-            $token->line,
-            $token->charPositionInLine,
+            $token->getLine(),
+            $token->getCharPositionInLine(),
             'function'
         );
 
         if (!$declared) {
             $this->addSemanticError(
                 "Redeclaracion de funcion 'main' en el mismo ambito.",
-                $token->line,
-                $token->charPositionInLine
+                $token->getLine(),
+                $token->getCharPositionInLine()
             );
         }
 
@@ -95,8 +95,8 @@ final class SemanticAnalyzer extends GolampiBaseVisitor
         $this->symbolTable->enterScope(
             $scopeName,
             'block',
-            $start->line,
-            $start->charPositionInLine
+            $start->getLine(),
+            $start->getCharPositionInLine()
         );
 
         $result = $this->visitChildren($ctx);
@@ -115,15 +115,15 @@ final class SemanticAnalyzer extends GolampiBaseVisitor
         $declared = $this->symbolTable->declare(
             $name,
             $type,
-            $token->line,
-            $token->charPositionInLine
+            $token->getLine(),
+            $token->getCharPositionInLine()
         );
 
         if (!$declared) {
             $this->addSemanticError(
                 "Redeclaracion de variable '$name' en el mismo ambito.",
-                $token->line,
-                $token->charPositionInLine
+                $token->getLine(),
+                $token->getCharPositionInLine()
             );
         }
 
@@ -140,8 +140,8 @@ final class SemanticAnalyzer extends GolampiBaseVisitor
         if ($resolved === null) {
             $this->addSemanticError(
                 "Variable '$name' usada sin declaracion previa.",
-                $token->line,
-                $token->charPositionInLine
+                $token->getLine(),
+                $token->getCharPositionInLine()
             );
         }
 
@@ -157,8 +157,8 @@ final class SemanticAnalyzer extends GolampiBaseVisitor
         if ($resolved === null) {
             $this->addSemanticError(
                 "Identificador '$name' usado sin declaracion previa.",
-                $token->line,
-                $token->charPositionInLine
+                $token->getLine(),
+                $token->getCharPositionInLine()
             );
         }
 

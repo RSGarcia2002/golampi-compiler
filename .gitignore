@@ -13,6 +13,7 @@ vendor/
 
 # ANTLR generated artifacts
 src/compiler/generated/
+src/compiler/grammar/.antlr/
 *.tokens
 *.interp
 

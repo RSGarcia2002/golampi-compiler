@@ -58,7 +58,7 @@ Salida de errores:
 Salida semántica:
 - Archivo: `reports/semantic_errors_phase2.json`
 - Tabla de símbolos: `reports/symbol_table_phase2.json`
-- Validaciones activas: redeclaración en mismo ámbito y uso de identificadores no declarados
+- Validaciones activas: redeclaración en mismo ámbito, uso de identificadores no declarados y tipos en asignaciones/operaciones
 
 ## Flujo de trabajo
 1. Planificar fase.

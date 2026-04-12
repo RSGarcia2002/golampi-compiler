@@ -14,7 +14,7 @@
 ## Fase 2 - Semántica
 - [x] Tabla de símbolos (ámbitos)
 - [x] Validación de declaración/uso de variables
-- [ ] Validación de tipos en asignación y operaciones
+- [x] Validación de tipos en asignación y operaciones
 - [x] Reporte de errores semánticos
 
 ## Fase 3 - Lenguaje requerido

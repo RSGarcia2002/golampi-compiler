@@ -1,0 +1,12 @@
+package main
+
+func main() {
+  var a int = 10;
+  var b string = "hola";
+  var c bool = true;
+
+  a = b;
+  b = a + 1;
+  c = a < b;
+  fmt.Println(!a);
+}

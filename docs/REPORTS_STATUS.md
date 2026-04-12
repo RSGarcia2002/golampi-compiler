@@ -16,7 +16,7 @@
 - Formato: scopes + symbols (id, tipo, ámbito, línea, columna)
 
 ## Reporte Semántico
-- Estado: Implementado (declaración/uso + redeclaración en ámbito)
+- Estado: Implementado (declaración/uso + redeclaración + chequeo de tipos)
 - Archivo generado: `reports/semantic_errors_phase2.json`
 - Fuente: `src/compiler/semantic/SemanticAnalyzer.php`
 
@@ -27,5 +27,4 @@
 ## Notas
 - Gramática base creada en `src/compiler/grammar/Golampi.g4`.
 - Script de generación ANTLR listo en `scripts/generate_antlr_php.sh`.
-- Semántica actual: tabla de símbolos con ámbitos y validación de uso/declaración.
-- Pendiente en Fase 2: validación estricta de tipos en operaciones y asignaciones.
+- Semántica actual: tabla de símbolos con ámbitos, validación de uso/declaración y reglas de tipos en expresiones/asignaciones.

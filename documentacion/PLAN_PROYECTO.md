@@ -22,14 +22,14 @@
 - [x] Operadores aritméticos, relacionales, lógicos
 - [x] if / switch / for
 - [~] break / continue / return (break/continue listos; return con tipo simple listo)
-- [ ] Arreglos (incluye multidimensional)
+- [~] Arreglos (literales y tipos `[]T` listos; multidimensional e indexación pendientes)
 - [~] Funciones, parámetros, retornos múltiples, main (parámetros/llamadas/retorno simple listos; retornos múltiples pendientes)
-- [~] Built-ins: fmt.Println, len, now, substr, typeOf (fmt.Println, len y typeOf listos)
+- [x] Built-ins: fmt.Println, len, now, substr, typeOf
 
 ## Fase 4 - Codegen ARM64
 - [ ] Modelo de memoria (stack/heap)
-- [~] Generación de .s por programa (esqueleto base automático implementado)
-- [ ] Prólogo/epílogo de funciones
+- [~] Generación de .s por programa (esqueleto con funciones detectadas y salto a `main`)
+- [~] Prólogo/epílogo de funciones (base por función emitida)
 - [ ] Labels y saltos para control de flujo
 - [ ] Llamadas a funciones y retorno
 

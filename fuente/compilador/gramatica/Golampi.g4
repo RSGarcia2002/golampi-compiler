@@ -84,6 +84,11 @@ constDecl
     ;
 
 typeSpec
+    : baseType
+    | '[' ']' baseType
+    ;
+
+baseType
     : 'int'
     | 'float'
     | 'bool'
@@ -117,6 +122,7 @@ expr
     | expr '||' expr                    # binaryExpr
     | '(' expr ')'                      # groupedExpr
     | IDENTIFIER '(' argList? ')'       # callExpr
+    | '[' argList? ']'                  # arrayLiteralExpr
     | literal                           # literalExpr
     | IDENTIFIER                        # identifierExpr
     ;

@@ -2,7 +2,7 @@
 
 ## Última actualización
 - Fecha: 2026-04-12
-- Estado general: Fase 3 en progreso
+- Estado general: Fase 3 avanzada + Fase 4 base extendida
 
 ## Reporte de Errores
 - Estado: Implementado (léxico/sintáctico)
@@ -21,9 +21,10 @@
 - Fuente: `fuente/compilador/semantica/AnalizadorSemantico.php`
 
 ## Código ARM64 (.s)
-- Estado: Implementado base (Fase 4 inicial)
+- Estado: Implementado base extendida (Fase 4)
 - Archivo generado: `reportes/programa_fase4.s`
-- Salida objetivo pendiente: generación completa por funciones/control de flujo
+- Salida actual: `_start` con salto a `main`, funciones detectadas desde tabla de símbolos, prólogo/epílogo base por función
+- Salida objetivo pendiente: control de flujo, llamadas reales y manejo de stack/heap
 
 ## Notas
 - Gramática base creada en `fuente/compilador/gramatica/Golampi.g4`.
@@ -32,5 +33,6 @@
 - Control de flujo activo: `if`, `for`, `break`, `continue` con validaciones semánticas de contexto y condición booleana.
 - Nuevos soportes Fase 3: `switch` con validación de tipos en `case`, y `const` con prohibición de reasignación.
 - Funciones activas: parámetros tipados, llamadas con validación de aridad/tipos, retorno simple tipado.
-- Built-ins activos: `fmt.Println`, `len`, `typeOf`.
+- Built-ins activos: `fmt.Println`, `len`, `now`, `substr`, `typeOf`.
+- Arreglos: soporte semántico para tipos `[]T` y literales (`[1,2,3]`) con validación de homogeneidad.
 - GUI base activa en `fuente/frontend/` con editor, consola y acción de análisis vía `fetch` al backend.

@@ -13,6 +13,7 @@ final class AnalizadorSemantico extends GolampiBaseVisitor
     private const TYPE_NIL = 'nil';
     private const TYPE_UNKNOWN = 'unknown';
     private const TYPE_ERROR = 'error';
+    private const TYPE_ARRAY_PREFIX = '[]';
 
     private TablaSimbolos $tablaSimbolos;
 
@@ -34,7 +35,9 @@ final class AnalizadorSemantico extends GolampiBaseVisitor
         $this->tablaSimbolos = new TablaSimbolos();
         $this->tablaSimbolos->enterScope('global', 'global', 0, 0);
 
-        $this->registrarFuncionBuiltin('len', [self::TYPE_STRING], [self::TYPE_INT]);
+        $this->registrarFuncionBuiltin('len', [self::TYPE_UNKNOWN], [self::TYPE_INT]);
+        $this->registrarFuncionBuiltin('now', [], [self::TYPE_STRING]);
+        $this->registrarFuncionBuiltin('substr', [self::TYPE_STRING, self::TYPE_INT, self::TYPE_INT], [self::TYPE_STRING]);
         $this->registrarFuncionBuiltin('typeOf', [self::TYPE_UNKNOWN], [self::TYPE_STRING]);
     }
 
@@ -338,6 +341,15 @@ final class AnalizadorSemantico extends GolampiBaseVisitor
             }
         }
 
+        if ($firma['builtin']) {
+            return $this->validarLlamadaBuiltin(
+                $nombre,
+                $tiposRecibidos,
+                $token->getLine(),
+                $token->getCharPositionInLine()
+            );
+        }
+
         if (count($tiposEsperados) !== count($tiposRecibidos)) {
             $this->addSemanticError(
                 "Llamada invalida a '$nombre': se esperaban " . count($tiposEsperados)
@@ -369,6 +381,51 @@ final class AnalizadorSemantico extends GolampiBaseVisitor
         }
 
         return $firma['retorno'][0];
+    }
+
+    public function visitArrayLiteralExpr($ctx): mixed
+    {
+        if ($ctx->argList() === null) {
+            return self::TYPE_ARRAY_PREFIX . self::TYPE_UNKNOWN;
+        }
+
+        $tipoElemento = self::TYPE_UNKNOWN;
+        foreach ($ctx->argList()->expr() as $elementoExpr) {
+            $tipoElementoActual = $this->visit($elementoExpr);
+            $tipoElementoActual = is_string($tipoElementoActual) ? $tipoElementoActual : self::TYPE_UNKNOWN;
+
+            if ($tipoElementoActual === self::TYPE_ERROR || $tipoElementoActual === self::TYPE_NIL) {
+                $token = $elementoExpr->getStart();
+                $this->addSemanticError(
+                    "Literal de arreglo invalido: no se permite elemento de tipo '$tipoElementoActual'.",
+                    $token->getLine(),
+                    $token->getCharPositionInLine()
+                );
+                return self::TYPE_ERROR;
+            }
+
+            if ($tipoElemento === self::TYPE_UNKNOWN) {
+                $tipoElemento = $tipoElementoActual;
+                continue;
+            }
+
+            if ($this->isNumericPair($tipoElemento, $tipoElementoActual)) {
+                $tipoElemento = $this->promoteNumericType($tipoElemento, $tipoElementoActual);
+                continue;
+            }
+
+            if ($tipoElemento !== $tipoElementoActual) {
+                $token = $elementoExpr->getStart();
+                $this->addSemanticError(
+                    "Literal de arreglo invalido: mezcla de tipos '$tipoElemento' y '$tipoElementoActual'.",
+                    $token->getLine(),
+                    $token->getCharPositionInLine()
+                );
+                return self::TYPE_ERROR;
+            }
+        }
+
+        return self::TYPE_ARRAY_PREFIX . $tipoElemento;
     }
 
     public function visitLiteralExpr($ctx): mixed
@@ -705,6 +762,14 @@ final class AnalizadorSemantico extends GolampiBaseVisitor
 
     private function tiposCompatiblesAsignacion(string $destino, string $origen): bool
     {
+        if ($this->isArrayType($destino) && $origen === self::TYPE_NIL) {
+            return true;
+        }
+
+        if ($this->isArrayType($destino) || $this->isArrayType($origen)) {
+            return $destino === $origen;
+        }
+
         if ($this->isSameType($destino, $origen)) {
             return true;
         }
@@ -725,6 +790,11 @@ final class AnalizadorSemantico extends GolampiBaseVisitor
     private function isSameType(string $left, string $right): bool
     {
         return $left === $right;
+    }
+
+    private function isArrayType(string $type): bool
+    {
+        return str_starts_with($type, self::TYPE_ARRAY_PREFIX);
     }
 
     private function tiposComparablesEnSwitch(string $tipoControl, string $tipoCaso): bool
@@ -827,5 +897,86 @@ final class AnalizadorSemantico extends GolampiBaseVisitor
     private function registrarFuncionBuiltin(string $nombre, array $parametros, array $retorno): void
     {
         $this->registrarFuncion($nombre, $parametros, $retorno, 0, 0, true);
+    }
+
+    /** @param array<int,string> $tiposRecibidos */
+    private function validarLlamadaBuiltin(string $nombre, array $tiposRecibidos, int $line, int $column): string
+    {
+        if ($nombre === 'len') {
+            if (count($tiposRecibidos) !== 1) {
+                $this->addSemanticError(
+                    "Llamada invalida a 'len': se esperaba 1 parametro y se recibieron " . count($tiposRecibidos) . ".",
+                    $line,
+                    $column
+                );
+                return self::TYPE_ERROR;
+            }
+
+            $tipo = $tiposRecibidos[0];
+            if ($tipo !== self::TYPE_STRING && !$this->isArrayType($tipo) && $tipo !== self::TYPE_ERROR) {
+                $this->addSemanticError(
+                    "Llamada invalida a 'len': se esperaba string o arreglo y se recibio '$tipo'.",
+                    $line,
+                    $column
+                );
+                return self::TYPE_ERROR;
+            }
+
+            return self::TYPE_INT;
+        }
+
+        if ($nombre === 'now') {
+            if (count($tiposRecibidos) !== 0) {
+                $this->addSemanticError(
+                    "Llamada invalida a 'now': no recibe parametros.",
+                    $line,
+                    $column
+                );
+                return self::TYPE_ERROR;
+            }
+
+            return self::TYPE_STRING;
+        }
+
+        if ($nombre === 'substr') {
+            if (count($tiposRecibidos) !== 3) {
+                $this->addSemanticError(
+                    "Llamada invalida a 'substr': se esperaban 3 parametros y se recibieron " . count($tiposRecibidos) . ".",
+                    $line,
+                    $column
+                );
+                return self::TYPE_ERROR;
+            }
+
+            if (
+                $tiposRecibidos[0] !== self::TYPE_STRING
+                || $tiposRecibidos[1] !== self::TYPE_INT
+                || $tiposRecibidos[2] !== self::TYPE_INT
+            ) {
+                $this->addSemanticError(
+                    "Llamada invalida a 'substr': firma esperada (string, int, int).",
+                    $line,
+                    $column
+                );
+                return self::TYPE_ERROR;
+            }
+
+            return self::TYPE_STRING;
+        }
+
+        if ($nombre === 'typeOf') {
+            if (count($tiposRecibidos) !== 1) {
+                $this->addSemanticError(
+                    "Llamada invalida a 'typeOf': se esperaba 1 parametro y se recibieron " . count($tiposRecibidos) . ".",
+                    $line,
+                    $column
+                );
+                return self::TYPE_ERROR;
+            }
+
+            return self::TYPE_STRING;
+        }
+
+        return self::TYPE_UNKNOWN;
     }
 }

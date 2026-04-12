@@ -1,0 +1,9 @@
+package main
+
+func main() {
+    var mezcla []int = [1, 2.5];
+    var bandera bool = true;
+    var largo int = len(bandera);
+    var recorte string = substr("compiler", 1, false);
+    fmt.Println(mezcla, largo, recorte);
+}

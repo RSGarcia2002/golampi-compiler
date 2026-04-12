@@ -20,6 +20,7 @@ final class SemanticAnalyzer extends GolampiBaseVisitor
     private array $errors = [];
 
     private int $blockCounter = 0;
+    private int $nivelBucles = 0;
 
     public function __construct()
     {
@@ -200,6 +201,76 @@ final class SemanticAnalyzer extends GolampiBaseVisitor
     public function visitLiteralExpr($ctx): mixed
     {
         return $this->visit($ctx->literal());
+    }
+
+    public function visitIfStmt($ctx): mixed
+    {
+        $tipoCondicion = $this->visit($ctx->expr());
+        if (!is_string($tipoCondicion)) {
+            $tipoCondicion = self::TYPE_UNKNOWN;
+        }
+
+        if ($tipoCondicion !== self::TYPE_BOOL && $tipoCondicion !== self::TYPE_ERROR) {
+            $this->addSemanticError(
+                "Condicion invalida en if: se esperaba 'bool' y se recibio '$tipoCondicion'.",
+                $ctx->expr()->getStart()->getLine(),
+                $ctx->expr()->getStart()->getCharPositionInLine()
+            );
+        }
+
+        return $this->visitChildren($ctx);
+    }
+
+    public function visitForStmt($ctx): mixed
+    {
+        if ($ctx->expr() !== null) {
+            $tipoCondicion = $this->visit($ctx->expr());
+            if (!is_string($tipoCondicion)) {
+                $tipoCondicion = self::TYPE_UNKNOWN;
+            }
+
+            if ($tipoCondicion !== self::TYPE_BOOL && $tipoCondicion !== self::TYPE_ERROR) {
+                $this->addSemanticError(
+                    "Condicion invalida en for: se esperaba 'bool' y se recibio '$tipoCondicion'.",
+                    $ctx->expr()->getStart()->getLine(),
+                    $ctx->expr()->getStart()->getCharPositionInLine()
+                );
+            }
+        }
+
+        $this->nivelBucles++;
+        $resultado = $this->visit($ctx->block());
+        $this->nivelBucles--;
+
+        return $resultado;
+    }
+
+    public function visitBreakStmt($ctx): mixed
+    {
+        if ($this->nivelBucles <= 0) {
+            $token = $ctx->getStart();
+            $this->addSemanticError(
+                "Uso invalido de 'break': solo se permite dentro de un bucle.",
+                $token->getLine(),
+                $token->getCharPositionInLine()
+            );
+        }
+
+        return null;
+    }
+
+    public function visitContinueStmt($ctx): mixed
+    {
+        if ($this->nivelBucles <= 0) {
+            $token = $ctx->getStart();
+            $this->addSemanticError(
+                "Uso invalido de 'continue': solo se permite dentro de un bucle.",
+                $token->getLine(),
+                $token->getCharPositionInLine()
+            );
+        }
+
+        return null;
     }
 
     public function visitGroupedExpr($ctx): mixed

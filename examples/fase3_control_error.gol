@@ -1,0 +1,14 @@
+package main
+
+func main() {
+  break;
+  continue;
+
+  if 10 {
+    fmt.Println("invalido");
+  }
+
+  for "hola" {
+    fmt.Println("invalido");
+  }
+}

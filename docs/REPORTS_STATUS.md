@@ -1,8 +1,8 @@
 # Estado de Reportes
 
 ## Última actualización
-- Fecha: 2026-04-11
-- Estado general: Fase 2 en progreso
+- Fecha: 2026-04-12
+- Estado general: Fase 3 en progreso
 
 ## Reporte de Errores
 - Estado: Implementado (léxico/sintáctico)
@@ -28,3 +28,4 @@
 - Gramática base creada en `src/compiler/grammar/Golampi.g4`.
 - Script de generación ANTLR listo en `scripts/generate_antlr_php.sh`.
 - Semántica actual: tabla de símbolos con ámbitos, validación de uso/declaración y reglas de tipos en expresiones/asignaciones.
+- Control de flujo activo: `if`, `for`, `break`, `continue` con validaciones semánticas de contexto y condición booleana.

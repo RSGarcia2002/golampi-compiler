@@ -25,8 +25,28 @@ statement
     | assignment ';'
     | printStmt ';'
     | returnStmt ';'
+    | ifStmt
+    | forStmt
+    | breakStmt ';'
+    | continueStmt ';'
     | expr ';'
     | block
+    ;
+
+ifStmt
+    : 'if' expr block ('else' (ifStmt | block))?
+    ;
+
+forStmt
+    : 'for' expr? block
+    ;
+
+breakStmt
+    : 'break'
+    ;
+
+continueStmt
+    : 'continue'
     ;
 
 varDecl

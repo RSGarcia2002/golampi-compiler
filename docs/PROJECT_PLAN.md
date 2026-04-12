@@ -20,8 +20,8 @@
 ## Fase 3 - Lenguaje requerido
 - [ ] Variables, constantes, nil
 - [ ] Operadores aritméticos, relacionales, lógicos
-- [ ] if / switch / for
-- [ ] break / continue / return
+- [~] if / switch / for (if y for listos; switch pendiente)
+- [~] break / continue / return (break y continue listos; return base ya soportado)
 - [ ] Arreglos (incluye multidimensional)
 - [ ] Funciones, parámetros, retornos múltiples, main
 - [ ] Built-ins: fmt.Println, len, now, substr, typeOf

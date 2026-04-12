@@ -1,0 +1,19 @@
+package main
+
+func main() {
+  var x int = 0;
+
+  for x < 4 {
+    if x % 2 == 0 {
+      fmt.Println("par", x);
+    } else {
+      fmt.Println("impar", x);
+    }
+
+    x = x + 1;
+  }
+
+  for {
+    break;
+  }
+}

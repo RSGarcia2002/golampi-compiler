@@ -3,7 +3,7 @@
 Compilador de **Golampi** con interfaz web, análisis léxico/sintáctico/semántico y generación de código **ARM64**.
 
 ## Estado actual
-Fase 2 en progreso: base léxica/sintáctica integrada y semántica inicial con tabla de símbolos.
+Fase 3 en progreso: semántica base completa y control de flujo inicial (`if`, `for`, `break`, `continue`).
 
 ## Estructura
 - `docs/`: planificación, guía de commits, estado de avances.
@@ -39,6 +39,11 @@ Fase 2 en progreso: base léxica/sintáctica integrada y semántica inicial con 
    ```bash
    ./scripts/run_phase1_demo.sh
    ```
+5. Probar semántica y control de flujo:
+   ```bash
+   ./scripts/run_phase2_demo.sh
+   ./scripts/run_phase3_demo.sh
+   ```
 
 ## Uso manual del parser
 Entrada por archivo:
@@ -58,7 +63,7 @@ Salida de errores:
 Salida semántica:
 - Archivo: `reports/semantic_errors_phase2.json`
 - Tabla de símbolos: `reports/symbol_table_phase2.json`
-- Validaciones activas: redeclaración en mismo ámbito, uso de identificadores no declarados y tipos en asignaciones/operaciones
+- Validaciones activas: redeclaración en mismo ámbito, uso de identificadores no declarados, tipos en asignaciones/operaciones y contexto válido de `break/continue`
 
 ## Flujo de trabajo
 1. Planificar fase.

@@ -41,6 +41,7 @@ final class GeneradorARM64 extends GolampiBaseVisitor
     private array $valoresStringConocidos = [];
 
     private int $contadorStrings = 0;
+    private bool $usaRuntimePrint = false;
 
     /**
      * @param array<string,mixed> $tablaSimbolos
@@ -53,6 +54,7 @@ final class GeneradorARM64 extends GolampiBaseVisitor
         $this->stringPorEtiqueta = [];
         $this->valoresStringConocidos = [];
         $this->contadorStrings = 0;
+        $this->usaRuntimePrint = false;
 
         $totalSimbolos = count($tablaSimbolos['symbols'] ?? []);
         $totalScopes = count($tablaSimbolos['scopes'] ?? []);
@@ -310,19 +312,46 @@ final class GeneradorARM64 extends GolampiBaseVisitor
     public function visitPrintStmt($ctx): mixed
     {
         if ($ctx->argList() === null) {
+            $this->usaRuntimePrint = true;
+            $this->emit('    bl _golampi_print_nl');
             return null;
         }
 
         $argumentos = $ctx->argList()->expr();
         if ($argumentos === []) {
+            $this->usaRuntimePrint = true;
+            $this->emit('    bl _golampi_print_nl');
             return null;
         }
 
-        // Por ahora dejamos el último valor evaluado en x0 como salida de depuración.
-        $ultimo = end($argumentos);
-        if ($ultimo !== false) {
-            $this->compilarExprEnX0($ultimo);
+        $this->usaRuntimePrint = true;
+        foreach ($argumentos as $arg) {
+            $this->compilarExprEnX0($arg);
+
+            $tipo = $this->tipoAproximadoExpr($arg);
+            if ($tipo === 'string') {
+                $this->emit('    bl _golampi_print_cstr');
+                continue;
+            }
+
+            if ($tipo === 'bool') {
+                $this->emit('    cmp x0, #0');
+                $etiquetaTrue = $this->nuevaEtiqueta('print_bool_true');
+                $etiquetaFin = $this->nuevaEtiqueta('print_bool_fin');
+                $this->emit('    b.ne ' . $etiquetaTrue);
+                $this->emit('    ldr x0, =L_bool_false');
+                $this->emit('    bl _golampi_print_cstr');
+                $this->emit('    b ' . $etiquetaFin);
+                $this->emit($etiquetaTrue . ':');
+                $this->emit('    ldr x0, =L_bool_true');
+                $this->emit('    bl _golampi_print_cstr');
+                $this->emit($etiquetaFin . ':');
+                continue;
+            }
+
+            $this->emit('    bl _golampi_print_int');
         }
+        $this->emit('    bl _golampi_print_nl');
 
         return null;
     }
@@ -885,6 +914,12 @@ final class GeneradorARM64 extends GolampiBaseVisitor
 
         if ($clase === 'LiteralExprContext') {
             $texto = $exprCtx->literal()?->getText() ?? '';
+            if (preg_match('/^-?\d+$/', $texto) === 1) {
+                return 'int';
+            }
+            if ($texto === 'true' || $texto === 'false') {
+                return 'bool';
+            }
             if ($texto !== '' && str_starts_with($texto, '"') && str_ends_with($texto, '"')) {
                 return 'string';
             }
@@ -898,6 +933,19 @@ final class GeneradorARM64 extends GolampiBaseVisitor
             if (in_array($nombre, ['now', 'substr', 'typeOf'], true)) {
                 return 'string';
             }
+        }
+
+        if ($clase === 'BinaryExprContext') {
+            $operador = $exprCtx->children[1]?->getText() ?? '';
+            if (in_array($operador, ['==', '!=', '<', '<=', '>', '>=', '&&', '||'], true)) {
+                return 'bool';
+            }
+            return 'int';
+        }
+
+        if ($clase === 'UnaryExprContext') {
+            $operador = $exprCtx->children[0]?->getText() ?? '';
+            return $operador === '!' ? 'bool' : 'int';
         }
 
         return 'unknown';
@@ -955,8 +1003,75 @@ final class GeneradorARM64 extends GolampiBaseVisitor
 
     private function emitRuntimeHelpers(): void
     {
-        if (!$this->usaHeap && $this->stringPorEtiqueta === []) {
+        if (!$this->usaHeap && $this->stringPorEtiqueta === [] && !$this->usaRuntimePrint) {
             return;
+        }
+
+        if ($this->usaRuntimePrint) {
+            $this->emit('');
+            $this->emit('_golampi_print_nl:');
+            $this->emit('    ldr x0, =L_nueva_linea');
+            $this->emit('    b _golampi_print_cstr');
+            $this->emit('');
+            $this->emit('_golampi_print_cstr:');
+            $this->emit('    mov x1, x0');
+            $this->emit('    mov x2, #0');
+            $this->emit('L_print_cstr_len:');
+            $this->emit('    ldrb w3, [x1, x2]');
+            $this->emit('    cbz w3, L_print_cstr_write');
+            $this->emit('    add x2, x2, #1');
+            $this->emit('    b L_print_cstr_len');
+            $this->emit('L_print_cstr_write:');
+            $this->emit('    mov x0, #1');
+            $this->emit('    mov x8, #64');
+            $this->emit('    svc #0');
+            $this->emit('    ret');
+            $this->emit('');
+            $this->emit('_golampi_print_int:');
+            $this->emit('    sub sp, sp, #64');
+            $this->emit('    mov x9, x0');
+            $this->emit('    mov w10, #0');
+            $this->emit('    cmp x9, #0');
+            $this->emit('    b.ge L_print_int_abs_listo');
+            $this->emit('    mov w10, #1');
+            $this->emit('    neg x9, x9');
+            $this->emit('L_print_int_abs_listo:');
+            $this->emit('    mov x11, sp');
+            $this->emit('    add x11, x11, #63');
+            $this->emit('    mov w12, #0');
+            $this->emit('    cmp x9, #0');
+            $this->emit('    b.ne L_print_int_loop');
+            $this->emit('    mov w13, #48');
+            $this->emit('    strb w13, [x11]');
+            $this->emit('    mov w12, #1');
+            $this->emit('    b L_print_int_signo');
+            $this->emit('L_print_int_loop:');
+            $this->emit('    mov x14, #10');
+            $this->emit('L_print_int_digit:');
+            $this->emit('    udiv x15, x9, x14');
+            $this->emit('    msub x16, x15, x14, x9');
+            $this->emit('    add w16, w16, #48');
+            $this->emit('    strb w16, [x11]');
+            $this->emit('    sub x11, x11, #1');
+            $this->emit('    add w12, w12, #1');
+            $this->emit('    mov x9, x15');
+            $this->emit('    cbnz x9, L_print_int_digit');
+            $this->emit('    add x11, x11, #1');
+            $this->emit('L_print_int_signo:');
+            $this->emit('    cmp w10, #0');
+            $this->emit('    beq L_print_int_emitir');
+            $this->emit('    sub x11, x11, #1');
+            $this->emit('    mov w13, #45');
+            $this->emit('    strb w13, [x11]');
+            $this->emit('    add w12, w12, #1');
+            $this->emit('L_print_int_emitir:');
+            $this->emit('    mov x0, #1');
+            $this->emit('    mov x1, x11');
+            $this->emit('    uxtw x2, w12');
+            $this->emit('    mov x8, #64');
+            $this->emit('    svc #0');
+            $this->emit('    add sp, sp, #64');
+            $this->emit('    ret');
         }
 
         if ($this->usaHeap) {
@@ -974,6 +1089,19 @@ final class GeneradorARM64 extends GolampiBaseVisitor
                 $this->emit($etiqueta . ':');
                 $this->emit('    .asciz "' . $this->escaparAsmString($valor) . '"');
             }
+        }
+
+        if ($this->usaRuntimePrint) {
+            if ($this->stringPorEtiqueta === []) {
+                $this->emit('');
+                $this->emit('.section .rodata');
+            }
+            $this->emit('L_nueva_linea:');
+            $this->emit('    .asciz "\\n"');
+            $this->emit('L_bool_true:');
+            $this->emit('    .asciz "true"');
+            $this->emit('L_bool_false:');
+            $this->emit('    .asciz "false"');
         }
 
         if ($this->usaHeap) {

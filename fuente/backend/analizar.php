@@ -106,21 +106,22 @@ function readInputSource(): array
 {
     if (PHP_SAPI === 'cli') {
         global $argv;
+        $execute = in_array('--ejecutar', $argv, true);
 
         if (isset($argv[1]) && is_file($argv[1])) {
             $source = file_get_contents($argv[1]);
             if ($source === false) {
                 return ['ok' => false, 'error' => 'No se pudo leer el archivo de entrada.'];
             }
-            return ['ok' => true, 'source' => $source];
+            return ['ok' => true, 'source' => $source, 'execute' => $execute];
         }
 
         $stdin = stream_get_contents(STDIN);
         if ($stdin !== false && trim($stdin) !== '') {
-            return ['ok' => true, 'source' => $stdin];
+            return ['ok' => true, 'source' => $stdin, 'execute' => $execute];
         }
 
-        return ['ok' => false, 'error' => 'Uso CLI: php fuente/backend/analizar.php <archivo.gol> o enviar código por STDIN.'];
+        return ['ok' => false, 'error' => 'Uso CLI: php fuente/backend/analizar.php <archivo.gol> [--ejecutar] o enviar código por STDIN.'];
     }
 
     $rawInput = file_get_contents('php://input');
@@ -133,7 +134,140 @@ function readInputSource(): array
         return ['ok' => false, 'error' => 'Formato inválido. Esperado: {"source": "..."}.'];
     }
 
-    return ['ok' => true, 'source' => $json['source']];
+    return [
+        'ok' => true,
+        'source' => $json['source'],
+        'execute' => isset($json['execute']) ? (bool) $json['execute'] : false,
+    ];
+}
+
+function comandoDisponible(string $comando): bool
+{
+    $resultado = shell_exec('command -v ' . escapeshellarg($comando) . ' 2>/dev/null');
+    return is_string($resultado) && trim($resultado) !== '';
+}
+
+/**
+ * @return array{exit_code:int,stdout:string,stderr:string}
+ */
+function ejecutarComando(string $comando, string $cwd): array
+{
+    $descriptorSpec = [
+        0 => ['pipe', 'r'],
+        1 => ['pipe', 'w'],
+        2 => ['pipe', 'w'],
+    ];
+
+    $proceso = proc_open($comando, $descriptorSpec, $pipes, $cwd);
+    if (!is_resource($proceso)) {
+        return [
+            'exit_code' => 127,
+            'stdout' => '',
+            'stderr' => 'No se pudo iniciar el proceso.',
+        ];
+    }
+
+    fclose($pipes[0]);
+    $stdout = stream_get_contents($pipes[1]);
+    $stderr = stream_get_contents($pipes[2]);
+    fclose($pipes[1]);
+    fclose($pipes[2]);
+    $exitCode = proc_close($proceso);
+
+    return [
+        'exit_code' => is_int($exitCode) ? $exitCode : 1,
+        'stdout' => is_string($stdout) ? $stdout : '',
+        'stderr' => is_string($stderr) ? $stderr : '',
+    ];
+}
+
+/**
+ * @return array<string,mixed>
+ */
+function ejecutarArm64SiDisponible(string $projectRoot, string $reportsDir): array
+{
+    if (PHP_OS_FAMILY !== 'Linux') {
+        return [
+            'intentada' => false,
+            'disponible' => false,
+            'ok' => false,
+            'codigo_salida' => null,
+            'stdout' => '',
+            'stderr' => '',
+            'mensaje' => 'La ejecución ARM64 automática está habilitada solo en Linux.',
+        ];
+    }
+
+    $faltantes = [];
+    foreach (['aarch64-linux-gnu-as', 'aarch64-linux-gnu-ld', 'qemu-aarch64'] as $cmd) {
+        if (!comandoDisponible($cmd)) {
+            $faltantes[] = $cmd;
+        }
+    }
+
+    if ($faltantes !== []) {
+        return [
+            'intentada' => false,
+            'disponible' => false,
+            'ok' => false,
+            'codigo_salida' => null,
+            'stdout' => '',
+            'stderr' => '',
+            'mensaje' => 'Faltan herramientas: ' . implode(', ', $faltantes) . '. Instala: sudo apt install -y binutils-aarch64-linux-gnu qemu-user',
+        ];
+    }
+
+    $asmPath = $reportsDir . '/programa_fase4.s';
+    $linuxDir = $reportsDir . '/linux';
+    $objPath = $linuxDir . '/programa_fase4.o';
+    $binPath = $linuxDir . '/programa_fase4';
+    if (!is_dir($linuxDir)) {
+        mkdir($linuxDir, 0777, true);
+    }
+
+    $cmdAs = 'aarch64-linux-gnu-as ' . escapeshellarg($asmPath) . ' -o ' . escapeshellarg($objPath);
+    $asResult = ejecutarComando($cmdAs, $projectRoot);
+    if ($asResult['exit_code'] !== 0) {
+        return [
+            'intentada' => true,
+            'disponible' => true,
+            'ok' => false,
+            'codigo_salida' => $asResult['exit_code'],
+            'stdout' => $asResult['stdout'],
+            'stderr' => $asResult['stderr'],
+            'mensaje' => 'Falló el ensamblado ARM64.',
+        ];
+    }
+
+    $cmdLd = 'aarch64-linux-gnu-ld ' . escapeshellarg($objPath) . ' -o ' . escapeshellarg($binPath);
+    $ldResult = ejecutarComando($cmdLd, $projectRoot);
+    if ($ldResult['exit_code'] !== 0) {
+        return [
+            'intentada' => true,
+            'disponible' => true,
+            'ok' => false,
+            'codigo_salida' => $ldResult['exit_code'],
+            'stdout' => $ldResult['stdout'],
+            'stderr' => $ldResult['stderr'],
+            'mensaje' => 'Falló el enlazado ARM64.',
+        ];
+    }
+
+    $cmdRun = 'qemu-aarch64 ' . escapeshellarg($binPath);
+    $runResult = ejecutarComando($cmdRun, $projectRoot);
+
+    return [
+        'intentada' => true,
+        'disponible' => true,
+        'ok' => $runResult['exit_code'] === 0,
+        'codigo_salida' => $runResult['exit_code'],
+        'stdout' => $runResult['stdout'],
+        'stderr' => $runResult['stderr'],
+        'mensaje' => $runResult['exit_code'] === 0
+            ? 'Ejecución ARM64 completada correctamente.'
+            : 'Ejecución ARM64 finalizó con error.',
+        'binario' => 'reportes/linux/programa_fase4',
+    ];
 }
 
 $input = readInputSource();
@@ -203,6 +337,21 @@ if (count($allErrors) === 0 && file_exists($generadorArm64File)) {
     $asmGenerado = $generador->generarProgramaBase($sourceCode, $symbolTablePayload, $tree);
 }
 
+$resultadoEjecucion = [
+    'intentada' => false,
+    'disponible' => false,
+    'ok' => false,
+    'codigo_salida' => null,
+    'stdout' => '',
+    'stderr' => '',
+    'mensaje' => 'No se solicitó ejecución del binario ARM64.',
+];
+
+$solicitaEjecucion = ($input['execute'] ?? false) === true;
+if ($solicitaEjecucion && count($allErrors) === 0 && $asmGenerado !== null) {
+    $resultadoEjecucion = ejecutarArm64SiDisponible($projectRoot, $reportsDir);
+}
+
 if (!is_dir($reportsDir)) {
     mkdir($reportsDir, 0777, true);
 }
@@ -247,6 +396,7 @@ echo json_encode([
         'archivo' => $asmGenerado !== null ? 'reportes/programa_fase4.s' : null,
         'contenido' => $asmGenerado,
     ],
+    'ejecucion' => $resultadoEjecucion,
     'reportes' => [
         'errores' => 'reportes/errores_fase1.json',
         'errores_semanticos' => 'reportes/errores_semanticos_fase2.json',

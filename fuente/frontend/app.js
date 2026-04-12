@@ -125,7 +125,7 @@ btnCompilar.addEventListener('click', async () => {
     const resp = await fetch('../backend/analizar.php', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ source }),
+      body: JSON.stringify({ source, execute: true }),
     });
 
     const data = await resp.json();
@@ -133,10 +133,29 @@ btnCompilar.addEventListener('click', async () => {
 
     const totalErrores = Array.isArray(data.errors) ? data.errors.length : 0;
     const asmGenerado = data.arm64?.generado === true;
-    escribirResumen(`OK: ${data.ok ? 'sí' : 'no'} | errores: ${totalErrores} | ASM: ${asmGenerado ? 'sí' : 'no'}`);
+    const ejecucion = data.ejecucion ?? null;
+    const ejecucionOk = ejecucion?.intentada === true && ejecucion?.ok === true;
+    escribirResumen(
+      `OK: ${data.ok ? 'sí' : 'no'} | errores: ${totalErrores} | ASM: ${asmGenerado ? 'sí' : 'no'} | Ejecutado: ${ejecucionOk ? 'sí' : 'no'}`
+    );
 
     if (asmGenerado && typeof data.arm64?.contenido === 'string') {
-      escribirConsola(data.arm64.contenido);
+      const secciones = [];
+      if (ejecucion && ejecucion.mensaje) {
+        const salida = typeof ejecucion.stdout === 'string' && ejecucion.stdout !== ''
+          ? ejecucion.stdout
+          : '(sin salida)';
+        const stderr = typeof ejecucion.stderr === 'string' && ejecucion.stderr !== ''
+          ? `\n\nstderr:\n${ejecucion.stderr}`
+          : '';
+        const codigo = ejecucion.codigo_salida !== null && ejecucion.codigo_salida !== undefined
+          ? `\n\ncódigo de salida: ${ejecucion.codigo_salida}`
+          : '';
+        secciones.push(`== Ejecución ARM64 ==\n${ejecucion.mensaje}\n\nstdout:\n${salida}${stderr}${codigo}`);
+      }
+
+      secciones.push(`== Código ARM64 ==\n${data.arm64.contenido}`);
+      escribirConsola(secciones.join('\n\n'));
       return;
     }
 

@@ -20,6 +20,12 @@ final class GeneradorARM64 extends GolampiBaseVisitor
     /** @var array<int, string> */
     private array $pilaSwitchFin = [];
 
+    /** @var array<int, array{tipo:string,end:string,cond:string}> */
+    private array $pilaControl = [];
+
+    /** @var array<string,int> */
+    private array $longitudesConocidas = [];
+
     /**
      * @param array<string,mixed> $tablaSimbolos
      */
@@ -100,6 +106,10 @@ final class GeneradorARM64 extends GolampiBaseVisitor
         $this->funcionActual = $nombre;
         $this->variablesLocales = [];
         $this->contadorSlotsLocales = 0;
+        $this->pilaBucles = [];
+        $this->pilaSwitchFin = [];
+        $this->pilaControl = [];
+        $this->longitudesConocidas = [];
 
         $this->emit('.global ' . $nombre);
         $this->emit($nombre . ':');
@@ -209,6 +219,11 @@ final class GeneradorARM64 extends GolampiBaseVisitor
         if ($ctx->expr() !== null) {
             $this->compilarExprEnX0($ctx->expr());
             $this->emit('    str x0, [x29, #' . $offset . ']');
+
+            $len = $this->resolverLenEnCompilacion($ctx->expr());
+            if ($len !== null) {
+                $this->longitudesConocidas[$nombre] = $len;
+            }
             return null;
         }
 
@@ -230,6 +245,13 @@ final class GeneradorARM64 extends GolampiBaseVisitor
 
         $this->compilarExprEnX0($ctx->expr());
         $this->emit('    str x0, [x29, #' . $this->variablesLocales[$nombre] . ']');
+
+        $len = $this->resolverLenEnCompilacion($ctx->expr());
+        if ($len !== null) {
+            $this->longitudesConocidas[$nombre] = $len;
+        } else {
+            unset($this->longitudesConocidas[$nombre]);
+        }
 
         return null;
     }
@@ -293,6 +315,7 @@ final class GeneradorARM64 extends GolampiBaseVisitor
         $etiquetaCond = $this->nuevaEtiqueta('for_cond');
         $etiquetaFin = $this->nuevaEtiqueta('for_fin');
         $this->pilaBucles[] = ['cond' => $etiquetaCond, 'end' => $etiquetaFin];
+        $this->pilaControl[] = ['tipo' => 'for', 'end' => $etiquetaFin, 'cond' => $etiquetaCond];
 
         $this->emit($etiquetaCond . ':');
         if ($ctx->expr() !== null) {
@@ -305,6 +328,7 @@ final class GeneradorARM64 extends GolampiBaseVisitor
         $this->emit('    b ' . $etiquetaCond);
         $this->emit($etiquetaFin . ':');
         array_pop($this->pilaBucles);
+        array_pop($this->pilaControl);
 
         return null;
     }
@@ -321,6 +345,7 @@ final class GeneradorARM64 extends GolampiBaseVisitor
         }
 
         $this->pilaSwitchFin[] = $etiquetaFin;
+        $this->pilaControl[] = ['tipo' => 'switch', 'end' => $etiquetaFin, 'cond' => ''];
 
         $this->compilarExprEnX0($ctx->expr());
         $this->emit('    mov x19, x0');
@@ -342,7 +367,9 @@ final class GeneradorARM64 extends GolampiBaseVisitor
             foreach ($caso->statement() as $statement) {
                 $this->compilarStatement($statement);
             }
-            $this->emit('    b ' . $etiquetaFin);
+            if (!$this->terminaConSalto($caso->statement())) {
+                $this->emit('    b ' . $etiquetaFin);
+            }
         }
 
         if ($ctx->defaultCase() !== null) {
@@ -350,26 +377,23 @@ final class GeneradorARM64 extends GolampiBaseVisitor
             foreach ($ctx->defaultCase()->statement() as $statement) {
                 $this->compilarStatement($statement);
             }
-            $this->emit('    b ' . $etiquetaFin);
+            if (!$this->terminaConSalto($ctx->defaultCase()->statement())) {
+                $this->emit('    b ' . $etiquetaFin);
+            }
         }
 
         $this->emit($etiquetaFin . ':');
         array_pop($this->pilaSwitchFin);
+        array_pop($this->pilaControl);
 
         return null;
     }
 
     public function visitBreakStmt($ctx): mixed
     {
-        $switchActual = $this->pilaSwitchFin[count($this->pilaSwitchFin) - 1] ?? null;
-        if ($switchActual !== null) {
-            $this->emit('    b ' . $switchActual);
-            return null;
-        }
-
-        $bucleActual = $this->pilaBucles[count($this->pilaBucles) - 1] ?? null;
-        if ($bucleActual !== null) {
-            $this->emit('    b ' . $bucleActual['end']);
+        $actual = $this->pilaControl[count($this->pilaControl) - 1] ?? null;
+        if ($actual !== null) {
+            $this->emit('    b ' . $actual['end']);
         }
 
         return null;
@@ -377,9 +401,12 @@ final class GeneradorARM64 extends GolampiBaseVisitor
 
     public function visitContinueStmt($ctx): mixed
     {
-        $bucleActual = $this->pilaBucles[count($this->pilaBucles) - 1] ?? null;
-        if ($bucleActual !== null) {
-            $this->emit('    b ' . $bucleActual['cond']);
+        for ($i = count($this->pilaControl) - 1; $i >= 0; $i--) {
+            $actual = $this->pilaControl[$i];
+            if ($actual['tipo'] === 'for') {
+                $this->emit('    b ' . $actual['cond']);
+                break;
+            }
         }
 
         return null;
@@ -628,7 +655,29 @@ final class GeneradorARM64 extends GolampiBaseVisitor
             }
         }
 
+        if ($clase === 'IdentifierExprContext') {
+            $nombre = $exprCtx->IDENTIFIER()?->getText() ?? '';
+            if ($nombre !== '' && isset($this->longitudesConocidas[$nombre])) {
+                return $this->longitudesConocidas[$nombre];
+            }
+        }
+
         return null;
+    }
+
+    /**
+     * @param array<int,mixed> $statements
+     */
+    private function terminaConSalto(array $statements): bool
+    {
+        if ($statements === []) {
+            return false;
+        }
+
+        $ultima = $statements[count($statements) - 1];
+        return $ultima->breakStmt() !== null
+            || $ultima->continueStmt() !== null
+            || $ultima->returnStmt() !== null;
     }
 
     private function reservarSlot(string $nombre): int

@@ -132,7 +132,7 @@ assignment
 assignTarget
     : IDENTIFIER
     | '*' IDENTIFIER
-    | IDENTIFIER '[' expr ']'
+    | IDENTIFIER ('[' expr ']')+
     ;
 
 postStmt
@@ -183,6 +183,7 @@ expr
     | '(' expr ')'                      # groupedExpr
     | IDENTIFIER '(' argList? ')'       # callExpr
     | '[' INT_LITERAL ']' typeSpec '{' exprList? '}' # typedArrayLiteralExpr
+    | '{' exprList? '}'                 # braceArrayLiteralExpr
     | '[' argList? ']'                  # arrayLiteralExpr
     | literal                           # literalExpr
     | IDENTIFIER                        # identifierExpr

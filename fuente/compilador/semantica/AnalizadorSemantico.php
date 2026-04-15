@@ -372,11 +372,14 @@ final class AnalizadorSemantico extends GolampiBaseVisitor
         if (str_starts_with($targetText, '*') && str_starts_with($targetType, '*')) {
             $targetType = substr($targetType, 1);
         }
-        if (str_contains($targetText, '[') && str_starts_with($targetType, '*')) {
-            $targetType = substr($targetType, 1);
-        }
-        if (str_contains($targetText, '[') && str_starts_with($targetType, self::TYPE_ARRAY_PREFIX)) {
-            $targetType = substr($targetType, strlen(self::TYPE_ARRAY_PREFIX));
+        $indexaciones = substr_count($targetText, '[');
+        for ($i = 0; $i < $indexaciones; $i++) {
+            if (str_starts_with($targetType, '*')) {
+                $targetType = substr($targetType, 1);
+            }
+            if (str_starts_with($targetType, self::TYPE_ARRAY_PREFIX)) {
+                $targetType = substr($targetType, strlen(self::TYPE_ARRAY_PREFIX));
+            }
         }
         $operator = $ctx->assignOp()->getText();
 
@@ -845,6 +848,42 @@ final class AnalizadorSemantico extends GolampiBaseVisitor
                     $token->getLine(),
                     $token->getCharPositionInLine()
                 );
+            }
+        }
+
+        return self::TYPE_ARRAY_PREFIX . $tipoElemento;
+    }
+
+    public function visitBraceArrayLiteralExpr($ctx): mixed
+    {
+        $exprs = $ctx->exprList()?->expr() ?? [];
+        if ($exprs === []) {
+            return self::TYPE_ARRAY_PREFIX . self::TYPE_UNKNOWN;
+        }
+
+        $tipoElemento = self::TYPE_UNKNOWN;
+        foreach ($exprs as $expr) {
+            $tipoActual = $this->visit($expr);
+            $tipoActual = is_string($tipoActual) ? $this->normalizarTipo($tipoActual) : self::TYPE_UNKNOWN;
+            if ($tipoActual === self::TYPE_ERROR || $tipoActual === self::TYPE_UNKNOWN) {
+                continue;
+            }
+            if ($tipoElemento === self::TYPE_UNKNOWN) {
+                $tipoElemento = $tipoActual;
+                continue;
+            }
+            if ($this->isNumericPair($tipoElemento, $tipoActual)) {
+                $tipoElemento = $this->promoteNumericType($tipoElemento, $tipoActual);
+                continue;
+            }
+            if (!$this->isSameType($tipoElemento, $tipoActual)) {
+                $token = $expr->getStart();
+                $this->addSemanticError(
+                    "Literal de arreglo invalido: mezcla de tipos '$tipoElemento' y '$tipoActual'.",
+                    $token->getLine(),
+                    $token->getCharPositionInLine()
+                );
+                return self::TYPE_ERROR;
             }
         }
 

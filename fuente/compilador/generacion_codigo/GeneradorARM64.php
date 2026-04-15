@@ -41,6 +41,10 @@ final class GeneradorARM64 extends GolampiBaseVisitor
     private array $valoresStringConocidos = [];
     /** @var array<string,string> */
     private array $valoresFloatConocidos = [];
+    /** @var array<string,mixed> */
+    private array $valoresArregloConocidos = [];
+    /** @var array<string,mixed> */
+    private array $valoresIndiceConocidos = [];
 
     private int $contadorStrings = 0;
     private bool $usaRuntimePrint = false;
@@ -56,6 +60,8 @@ final class GeneradorARM64 extends GolampiBaseVisitor
         $this->stringPorEtiqueta = [];
         $this->valoresStringConocidos = [];
         $this->valoresFloatConocidos = [];
+        $this->valoresArregloConocidos = [];
+        $this->valoresIndiceConocidos = [];
         $this->contadorStrings = 0;
         $this->usaRuntimePrint = false;
 
@@ -143,6 +149,8 @@ final class GeneradorARM64 extends GolampiBaseVisitor
         $this->tiposVariables = [];
         $this->valoresStringConocidos = [];
         $this->valoresFloatConocidos = [];
+        $this->valoresArregloConocidos = [];
+        $this->valoresIndiceConocidos = [];
 
         $this->emit('.global ' . $nombre);
         $this->emit($nombre . ':');
@@ -263,7 +271,8 @@ final class GeneradorARM64 extends GolampiBaseVisitor
     {
         $identificadores = $ctx->identifierList()?->IDENTIFIER() ?? [];
         $expresiones = $ctx->exprList()?->expr() ?? [];
-        $tipoDeclarado = $this->normalizarTipo($ctx->typeSpec()?->getText() ?? 'unknown');
+        $tipoDeclaradoRaw = $ctx->typeSpec()?->getText() ?? 'unknown';
+        $tipoDeclarado = $this->normalizarTipo($tipoDeclaradoRaw);
         $limite = count($identificadores);
 
         for ($i = 0; $i < $limite; $i++) {
@@ -292,12 +301,26 @@ final class GeneradorARM64 extends GolampiBaseVisitor
                     $this->valoresFloatConocidos[$nombre] = $floatConst;
                 }
 
+                $valorArreglo = $this->resolverValorConstanteExpr($expresiones[$i]);
+                if (is_array($valorArreglo)) {
+                    $this->valoresArregloConocidos[$nombre] = $valorArreglo;
+                    $this->longitudesConocidas[$nombre] = count($valorArreglo);
+                }
+
                 continue;
             }
 
             $this->emit("    // valor por defecto para '{$nombre}'");
             $this->emit('    mov x0, #0');
             $this->emit('    str x0, [x29, #' . $offset . ']');
+
+            if (str_starts_with($tipoDeclaradoRaw, '[')) {
+                $inicial = $this->crearArregloCeroDesdeTipo($tipoDeclaradoRaw);
+                if ($inicial !== null) {
+                    $this->valoresArregloConocidos[$nombre] = $inicial;
+                    $this->longitudesConocidas[$nombre] = count($inicial);
+                }
+            }
         }
 
         return null;
@@ -336,6 +359,12 @@ final class GeneradorARM64 extends GolampiBaseVisitor
             $this->emit("    // declaracion corta: {$nombre} := <expr>");
             $this->compilarExprEnX0($expresiones[$i]);
             $this->emit('    str x0, [x29, #' . $offset . ']');
+
+            $valorArreglo = $this->resolverValorConstanteExpr($expresiones[$i]);
+            if (is_array($valorArreglo)) {
+                $this->valoresArregloConocidos[$nombre] = $valorArreglo;
+                $this->longitudesConocidas[$nombre] = count($valorArreglo);
+            }
         }
 
         return null;
@@ -361,6 +390,17 @@ final class GeneradorARM64 extends GolampiBaseVisitor
 
         $operador = $ctx->assignOp()?->getText() ?? '=';
         $this->emit("    // asignacion: {$nombre} {$operador} <expr>");
+
+        if (str_contains($targetText, '[') && $operador === '=') {
+            $this->compilarExprEnX0($ctx->expr());
+            $indices = $this->extraerIndicesConstantesDesdeTarget($targetText);
+            $valorConst = $this->resolverValorConstanteExpr($ctx->expr());
+            if ($indices !== null && $valorConst !== null) {
+                $this->asignarElementoArregloConocido($nombre, $indices, $valorConst);
+                $this->valoresIndiceConocidos[$targetText] = $valorConst;
+            }
+            return null;
+        }
 
         if ($operador === '=') {
             $this->compilarExprEnX0($ctx->expr());
@@ -671,6 +711,19 @@ final class GeneradorARM64 extends GolampiBaseVisitor
             return;
         }
 
+        if ($clase === 'IndexExprContext') {
+            $valor = $this->resolverValorConstanteExpr($exprCtx);
+            if ($valor !== null) {
+                $this->emit('    // acceso por indice (valor conocido en compilacion)');
+                $this->emitValorConstanteEnX0($valor);
+                return;
+            }
+
+            $this->emit('    // acceso por indice (stub backend base)');
+            $this->emit('    mov x0, #0');
+            return;
+        }
+
         if ($clase === 'IdentifierExprContext') {
             $nombre = $exprCtx->IDENTIFIER()?->getText() ?? '';
             if ($nombre !== '' && isset($this->variablesLocales[$nombre])) {
@@ -873,6 +926,15 @@ final class GeneradorARM64 extends GolampiBaseVisitor
 
             $this->emit('    mov x0, x10');
             return;
+        }
+
+        if ($clase === 'TypedArrayLiteralExprContext' || $clase === 'BraceArrayLiteralExprContext') {
+            $valor = $this->resolverValorConstanteExpr($exprCtx);
+            if (is_array($valor)) {
+                $this->emit('    // literal de arreglo tipado (referencia simbolica)');
+                $this->emit('    mov x0, #0');
+                return;
+            }
         }
 
         $this->emit('    mov x0, #0');
@@ -1080,6 +1142,14 @@ final class GeneradorARM64 extends GolampiBaseVisitor
 
     private function resolverEnteroConstante($exprCtx): ?int
     {
+        $valor = $this->resolverValorConstanteExpr($exprCtx);
+        if (is_int($valor)) {
+            return $valor;
+        }
+        if (is_bool($valor)) {
+            return $valor ? 1 : 0;
+        }
+
         if ($exprCtx === null) {
             return null;
         }
@@ -1097,6 +1167,11 @@ final class GeneradorARM64 extends GolampiBaseVisitor
 
     private function resolverStringConstante($exprCtx): ?string
     {
+        $valor = $this->resolverValorConstanteExpr($exprCtx);
+        if (is_string($valor)) {
+            return $valor;
+        }
+
         if ($exprCtx === null) {
             return null;
         }
@@ -1145,6 +1220,12 @@ final class GeneradorARM64 extends GolampiBaseVisitor
 
     private function resolverFloatConstante($exprCtx): ?string
     {
+        $valor = $this->resolverValorConstanteExpr($exprCtx);
+        if (is_float($valor)) {
+            $texto = (string) $valor;
+            return str_contains($texto, '.') ? $texto : ($texto . '.0');
+        }
+
         if ($exprCtx === null) {
             return null;
         }
@@ -1168,6 +1249,116 @@ final class GeneradorARM64 extends GolampiBaseVisitor
         return null;
     }
 
+    private function resolverValorConstanteExpr($exprCtx): mixed
+    {
+        if ($exprCtx === null) {
+            return null;
+        }
+
+        $clase = (new ReflectionClass($exprCtx))->getShortName();
+        if ($clase === 'LiteralExprContext') {
+            $texto = $exprCtx->literal()?->getText() ?? '';
+            if (preg_match('/^-?\d+$/', $texto) === 1) {
+                return (int) $texto;
+            }
+            if (preg_match('/^-?\d+\.\d+$/', $texto) === 1) {
+                return (float) $texto;
+            }
+            if ($texto === 'true') {
+                return true;
+            }
+            if ($texto === 'false') {
+                return false;
+            }
+            if ($texto === 'nil') {
+                return null;
+            }
+            if ($texto !== '' && str_starts_with($texto, '"') && str_ends_with($texto, '"')) {
+                return stripcslashes(substr($texto, 1, -1));
+            }
+            if ($texto !== '' && str_starts_with($texto, "'") && str_ends_with($texto, "'")) {
+                $sinComillas = stripcslashes(substr($texto, 1, -1));
+                return $sinComillas === '' ? 0 : ord($sinComillas[0]);
+            }
+            return null;
+        }
+
+        if ($clase === 'IdentifierExprContext') {
+            $nombre = $exprCtx->IDENTIFIER()?->getText() ?? '';
+            if ($nombre !== '' && array_key_exists($nombre, $this->valoresArregloConocidos)) {
+                return $this->valoresArregloConocidos[$nombre];
+            }
+            if ($nombre !== '' && isset($this->valoresStringConocidos[$nombre])) {
+                return $this->valoresStringConocidos[$nombre];
+            }
+            if ($nombre !== '' && isset($this->valoresFloatConocidos[$nombre])) {
+                return (float) $this->valoresFloatConocidos[$nombre];
+            }
+            return null;
+        }
+
+        if ($clase === 'GroupedExprContext') {
+            return $this->resolverValorConstanteExpr($exprCtx->expr());
+        }
+
+        if ($clase === 'ArrayLiteralExprContext') {
+            $exprs = $exprCtx->argList()?->expr() ?? [];
+            $resultado = [];
+            foreach ($exprs as $expr) {
+                $resultado[] = $this->resolverValorConstanteExpr($expr);
+            }
+            return $resultado;
+        }
+
+        if ($clase === 'BraceArrayLiteralExprContext') {
+            $exprs = $exprCtx->exprList()?->expr() ?? [];
+            $resultado = [];
+            foreach ($exprs as $expr) {
+                $resultado[] = $this->resolverValorConstanteExpr($expr);
+            }
+            return $resultado;
+        }
+
+        if ($clase === 'TypedArrayLiteralExprContext') {
+            $exprs = $exprCtx->exprList()?->expr() ?? [];
+            $resultado = [];
+            foreach ($exprs as $expr) {
+                $resultado[] = $this->resolverValorConstanteExpr($expr);
+            }
+            return $resultado;
+        }
+
+        if ($clase === 'IndexExprContext') {
+            $base = $this->resolverValorConstanteExpr($exprCtx->expr(0));
+            $indice = $this->resolverEnteroConstante($exprCtx->expr(1));
+            if (is_array($base) && $indice !== null && array_key_exists($indice, $base)) {
+                return $base[$indice];
+            }
+
+            $porTexto = $this->resolverIndiceDesdeTexto($exprCtx->getText());
+            if ($porTexto !== null) {
+                return $porTexto;
+            }
+            return null;
+        }
+
+        if ($clase === 'CallExprContext') {
+            $nombre = $exprCtx->IDENTIFIER()?->getText() ?? '';
+            $args = $exprCtx->argList()?->expr() ?? [];
+            if ($nombre === 'len' && isset($args[0])) {
+                $arg = $this->resolverValorConstanteExpr($args[0]);
+                if (is_string($arg)) {
+                    return strlen($arg);
+                }
+                if (is_array($arg)) {
+                    return count($arg);
+                }
+            }
+        }
+
+        return null;
+    }
+
     private function tipoAproximadoExpr($exprCtx): string
     {
         if ($exprCtx === null) {
@@ -1178,6 +1369,17 @@ final class GeneradorARM64 extends GolampiBaseVisitor
 
         if ($clase === 'ArrayLiteralExprContext') {
             return '[]unknown';
+        }
+
+        if ($clase === 'TypedArrayLiteralExprContext' || $clase === 'BraceArrayLiteralExprContext') {
+            $exprs = $clase === 'TypedArrayLiteralExprContext'
+                ? ($exprCtx->exprList()?->expr() ?? [])
+                : ($exprCtx->exprList()?->expr() ?? []);
+            if ($exprs === []) {
+                return '[]unknown';
+            }
+            $tipoElem = $this->tipoAproximadoExpr($exprs[0]);
+            return '[]' . $tipoElem;
         }
 
         if ($clase === 'IdentifierExprContext') {
@@ -1226,6 +1428,17 @@ final class GeneradorARM64 extends GolampiBaseVisitor
             return 'int';
         }
 
+        if ($clase === 'IndexExprContext') {
+            $tipoBase = $this->tipoAproximadoExpr($exprCtx->expr(0));
+            if (str_starts_with($tipoBase, '*')) {
+                $tipoBase = substr($tipoBase, 1);
+            }
+            if (str_starts_with($tipoBase, '[]')) {
+                return substr($tipoBase, 2);
+            }
+            return 'unknown';
+        }
+
         if ($clase === 'UnaryExprContext') {
             $operador = $exprCtx->children[0]?->getText() ?? '';
             return $operador === '!' ? 'bool' : 'int';
@@ -1247,6 +1460,110 @@ final class GeneradorARM64 extends GolampiBaseVisitor
             return 'float';
         }
         return $tipo;
+    }
+
+    private function emitValorConstanteEnX0(mixed $valor): void
+    {
+        if (is_int($valor)) {
+            $this->emit('    ldr x0, =' . $valor);
+            return;
+        }
+        if (is_bool($valor)) {
+            $this->emit('    mov x0, #' . ($valor ? '1' : '0'));
+            return;
+        }
+        if (is_string($valor)) {
+            $etiqueta = $this->registrarLiteralString($valor);
+            $this->emit('    ldr x0, =' . $etiqueta);
+            return;
+        }
+        if (is_float($valor)) {
+            $this->emit('    ldr x0, =' . (int) $valor);
+            return;
+        }
+        $this->emit('    mov x0, #0');
+    }
+
+    private function extraerIndicesConstantesDesdeTarget(string $targetText): ?array
+    {
+        if (!preg_match_all('/\[([^\]]+)\]/', $targetText, $matches)) {
+            return null;
+        }
+        $indices = [];
+        foreach ($matches[1] as $raw) {
+            if (preg_match('/^-?\d+$/', trim($raw)) !== 1) {
+                return null;
+            }
+            $indices[] = (int) trim($raw);
+        }
+        return $indices;
+    }
+
+    private function asignarElementoArregloConocido(string $nombre, array $indices, mixed $valor): void
+    {
+        if (!isset($this->valoresArregloConocidos[$nombre])) {
+            return;
+        }
+        $ref = &$this->valoresArregloConocidos[$nombre];
+        $ultimo = array_pop($indices);
+        foreach ($indices as $idx) {
+            if (!is_array($ref) || !array_key_exists($idx, $ref)) {
+                return;
+            }
+            $ref = &$ref[$idx];
+        }
+        if (!is_array($ref) || $ultimo === null || !array_key_exists($ultimo, $ref)) {
+            return;
+        }
+        $ref[$ultimo] = $valor;
+    }
+
+    private function crearArregloCeroDesdeTipo(string $tipo): ?array
+    {
+        if (preg_match_all('/\[([0-9]+)\]/', $tipo, $matches) < 1 || $matches[1] === []) {
+            return null;
+        }
+        $dims = array_map(static fn($x) => (int) $x, $matches[1]);
+        return $this->crearArregloCeroRec($dims, 0);
+    }
+
+    private function crearArregloCeroRec(array $dims, int $nivel): array
+    {
+        $tam = $dims[$nivel] ?? 0;
+        $out = [];
+        for ($i = 0; $i < $tam; $i++) {
+            $out[] = isset($dims[$nivel + 1]) ? $this->crearArregloCeroRec($dims, $nivel + 1) : 0;
+        }
+        return $out;
+    }
+
+    private function resolverIndiceDesdeTexto(string $texto): mixed
+    {
+        if (array_key_exists($texto, $this->valoresIndiceConocidos)) {
+            return $this->valoresIndiceConocidos[$texto];
+        }
+
+        if (preg_match('/^([a-zA-Z_][a-zA-Z_0-9]*)(\[[0-9]+\])+$/', $texto, $m) !== 1) {
+            return null;
+        }
+        $nombre = $m[1];
+        if (!isset($this->valoresArregloConocidos[$nombre])) {
+            return null;
+        }
+        if (!preg_match_all('/\[([0-9]+)\]/', $texto, $indicesMatch)) {
+            return null;
+        }
+
+        $actual = $this->valoresArregloConocidos[$nombre];
+        foreach ($indicesMatch[1] as $raw) {
+            $idx = (int) $raw;
+            if (!is_array($actual) || !array_key_exists($idx, $actual)) {
+                return null;
+            }
+            $actual = $actual[$idx];
+        }
+
+        return $actual;
     }
 
     private function compilarForComponente($ctx): void

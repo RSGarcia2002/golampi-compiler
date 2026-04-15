@@ -369,6 +369,7 @@ final class GeneradorARM64 extends GolampiBaseVisitor
         $etiquetaElse = $this->nuevaEtiqueta('if_else');
         $etiquetaFin = $this->nuevaEtiqueta('if_fin');
 
+        $this->emit('    // evaluar condicion del if');
         $this->compilarExprEnX0($ctx->expr());
         $this->emit('    cmp x0, #0');
         $this->emit('    beq ' . $etiquetaElse);
@@ -398,6 +399,7 @@ final class GeneradorARM64 extends GolampiBaseVisitor
 
         $this->emit($etiquetaCond . ':');
         if ($ctx->expr() !== null) {
+            $this->emit('    // evaluar condicion del for');
             $this->compilarExprEnX0($ctx->expr());
             $this->emit('    cmp x0, #0');
             $this->emit('    beq ' . $etiquetaFin);
@@ -427,10 +429,12 @@ final class GeneradorARM64 extends GolampiBaseVisitor
         $this->pilaSwitchFin[] = $etiquetaFin;
         $this->pilaControl[] = ['tipo' => 'switch', 'end' => $etiquetaFin, 'cond' => ''];
 
+        $this->emit('    // evaluar expresion principal del switch');
         $this->compilarExprEnX0($ctx->expr());
         $this->emit('    mov x19, x0');
 
         foreach ($casos as $index => $caso) {
+            $this->emit('    // comparar con case #' . $index);
             $this->compilarExprEnX0($caso->expr());
             $this->emit('    cmp x19, x0');
             $this->emit('    beq ' . $labelsCasos[$index]);
@@ -473,6 +477,7 @@ final class GeneradorARM64 extends GolampiBaseVisitor
     {
         $actual = $this->pilaControl[count($this->pilaControl) - 1] ?? null;
         if ($actual !== null) {
+            $this->emit('    // break: salir de estructura actual');
             $this->emit('    b ' . $actual['end']);
         }
 
@@ -484,6 +489,7 @@ final class GeneradorARM64 extends GolampiBaseVisitor
         for ($i = count($this->pilaControl) - 1; $i >= 0; $i--) {
             $actual = $this->pilaControl[$i];
             if ($actual['tipo'] === 'for') {
+                $this->emit('    // continue: volver a condicion del for');
                 $this->emit('    b ' . $actual['cond']);
                 break;
             }
@@ -503,6 +509,7 @@ final class GeneradorARM64 extends GolampiBaseVisitor
 
         if ($clase === 'LiteralExprContext') {
             $texto = $exprCtx->literal()?->getText() ?? '0';
+            $this->emit("    // literal detectado: {$texto}");
             $this->emitLiteralEnX0($texto);
             return;
         }
@@ -579,6 +586,7 @@ final class GeneradorARM64 extends GolampiBaseVisitor
 
             if ($nombre !== '') {
                 if ($nombre === 'len') {
+                    $this->emit('    // builtin len(...)');
                     if (isset($args[0])) {
                         $tipoArg = $this->tipoAproximadoExpr($args[0]);
                         $lenConstante = $this->resolverLenEnCompilacion($args[0]);
@@ -608,6 +616,7 @@ final class GeneradorARM64 extends GolampiBaseVisitor
                 }
 
                 if ($nombre === 'now') {
+                    $this->emit('    // builtin now(): fecha/hora en string');
                     $valor = date(DATE_ATOM);
                     $etiqueta = $this->registrarLiteralString($valor);
                     $this->emit('    ldr x0, =' . $etiqueta);
@@ -615,6 +624,7 @@ final class GeneradorARM64 extends GolampiBaseVisitor
                 }
 
                 if ($nombre === 'typeOf') {
+                    $this->emit('    // builtin typeOf(...)');
                     $tipo = isset($args[0]) ? $this->tipoAproximadoExpr($args[0]) : 'unknown';
                     $etiqueta = $this->registrarLiteralString($tipo);
                     $this->emit('    ldr x0, =' . $etiqueta);
@@ -622,6 +632,7 @@ final class GeneradorARM64 extends GolampiBaseVisitor
                 }
 
                 if ($nombre === 'substr') {
+                    $this->emit('    // builtin substr(...)');
                     if (count($args) === 3) {
                         $base = $this->resolverStringConstante($args[0]);
                         $inicio = $this->resolverEnteroConstante($args[1]);
@@ -681,68 +692,80 @@ final class GeneradorARM64 extends GolampiBaseVisitor
     private function emitOperacionBinaria(string $operador): void
     {
         if ($operador === '+') {
+            $this->emit('    // operacion aritmetica: suma');
             $this->emit('    add x0, x1, x0');
             return;
         }
 
         if ($operador === '-') {
+            $this->emit('    // operacion aritmetica: resta');
             $this->emit('    sub x0, x1, x0');
             return;
         }
 
         if ($operador === '*') {
+            $this->emit('    // operacion aritmetica: multiplicacion');
             $this->emit('    mul x0, x1, x0');
             return;
         }
 
         if ($operador === '/') {
+            $this->emit('    // operacion aritmetica: division entera');
             $this->emit('    sdiv x0, x1, x0');
             return;
         }
 
         if ($operador === '%') {
+            $this->emit('    // operacion aritmetica: modulo');
             $this->emit('    sdiv x2, x1, x0');
             $this->emit('    msub x0, x2, x0, x1');
             return;
         }
 
         if ($operador === '==') {
+            $this->emit('    // operacion relacional: igualdad');
             $this->emit('    cmp x1, x0');
             $this->emit('    cset x0, eq');
             return;
         }
 
         if ($operador === '!=') {
+            $this->emit('    // operacion relacional: diferencia');
             $this->emit('    cmp x1, x0');
             $this->emit('    cset x0, ne');
             return;
         }
 
         if ($operador === '<') {
+            $this->emit('    // operacion relacional: menor que');
             $this->emit('    cmp x1, x0');
             $this->emit('    cset x0, lt');
             return;
         }
 
         if ($operador === '<=') {
+            $this->emit('    // operacion relacional: menor o igual');
             $this->emit('    cmp x1, x0');
             $this->emit('    cset x0, le');
             return;
         }
 
         if ($operador === '>') {
+            $this->emit('    // operacion relacional: mayor que');
             $this->emit('    cmp x1, x0');
             $this->emit('    cset x0, gt');
             return;
         }
 
         if ($operador === '>=') {
+            $this->emit('    // operacion relacional: mayor o igual');
             $this->emit('    cmp x1, x0');
             $this->emit('    cset x0, ge');
             return;
         }
 
         if ($operador === '&&') {
+            $this->emit('    // operacion logica: AND');
             $this->emit('    cmp x1, #0');
             $this->emit('    cset x1, ne');
             $this->emit('    cmp x0, #0');
@@ -752,6 +775,7 @@ final class GeneradorARM64 extends GolampiBaseVisitor
         }
 
         if ($operador === '||') {
+            $this->emit('    // operacion logica: OR');
             $this->emit('    cmp x1, #0');
             $this->emit('    cset x1, ne');
             $this->emit('    cmp x0, #0');
@@ -767,16 +791,19 @@ final class GeneradorARM64 extends GolampiBaseVisitor
     private function emitLiteralEnX0(string $texto): void
     {
         if (preg_match('/^-?\d+$/', $texto) === 1) {
+            $this->emit('    // literal entero');
             $this->emit('    ldr x0, =' . $texto);
             return;
         }
 
         if ($texto === 'true') {
+            $this->emit('    // literal booleano true');
             $this->emit('    mov x0, #1');
             return;
         }
 
         if ($texto === 'false' || $texto === 'nil') {
+            $this->emit($texto === 'nil' ? '    // literal nil (se representa como 0)' : '    // literal booleano false');
             $this->emit('    mov x0, #0');
             return;
         }
@@ -784,11 +811,13 @@ final class GeneradorARM64 extends GolampiBaseVisitor
         if ($texto !== '' && str_starts_with($texto, '"') && str_ends_with($texto, '"')) {
             $sinComillas = substr($texto, 1, -1);
             $etiqueta = $this->registrarLiteralString(stripcslashes($sinComillas));
+            $this->emit('    // literal string');
             $this->emit('    ldr x0, =' . $etiqueta);
             return;
         }
 
         // float por ahora como stub para mantener compilación base ARM64.
+        $this->emit('    // literal float (stub actual -> 0)');
         $this->emit('    mov x0, #0');
     }
 

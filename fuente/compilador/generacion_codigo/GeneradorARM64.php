@@ -271,13 +271,14 @@ final class GeneradorARM64 extends GolampiBaseVisitor
     {
         $identificadores = $ctx->identifierList()?->IDENTIFIER() ?? [];
         $expresiones = $ctx->exprList()?->expr() ?? [];
-        $tipoDeclaradoRaw = $ctx->typeSpec()?->getText() ?? 'unknown';
-        $tipoDeclarado = $this->normalizarTipo($tipoDeclaradoRaw);
+        $tipoDeclaradoRaw = $ctx->typeSpec()?->getText();
         $limite = count($identificadores);
 
         for ($i = 0; $i < $limite; $i++) {
             $nombre = $identificadores[$i]->getText();
             $offset = $this->reservarSlot($nombre);
+            $tipoActualRaw = $tipoDeclaradoRaw ?? (isset($expresiones[$i]) ? $this->tipoAproximadoExpr($expresiones[$i]) : 'unknown');
+            $tipoDeclarado = $this->normalizarTipo($tipoActualRaw);
             $this->tiposVariables[$nombre] = $tipoDeclarado;
             $this->emit("    // declaracion: var {$nombre} {$tipoDeclarado}");
 
@@ -314,8 +315,8 @@ final class GeneradorARM64 extends GolampiBaseVisitor
             $this->emit('    mov x0, #0');
             $this->emit('    str x0, [x29, #' . $offset . ']');
 
-            if (str_starts_with($tipoDeclaradoRaw, '[')) {
-                $inicial = $this->crearArregloCeroDesdeTipo($tipoDeclaradoRaw);
+            if ($tipoActualRaw !== null && str_starts_with($tipoActualRaw, '[')) {
+                $inicial = $this->crearArregloCeroDesdeTipo($tipoActualRaw);
                 if ($inicial !== null) {
                     $this->valoresArregloConocidos[$nombre] = $inicial;
                     $this->longitudesConocidas[$nombre] = count($inicial);
@@ -736,6 +737,12 @@ final class GeneradorARM64 extends GolampiBaseVisitor
         }
 
         if ($clase === 'GroupedExprContext') {
+            $this->compilarExprEnX0($exprCtx->expr());
+            return;
+        }
+
+        if ($clase === 'CastExprContext') {
+            $this->emit('    // conversion de tipo');
             $this->compilarExprEnX0($exprCtx->expr());
             return;
         }
@@ -1301,6 +1308,27 @@ final class GeneradorARM64 extends GolampiBaseVisitor
             return $this->resolverValorConstanteExpr($exprCtx->expr());
         }
 
+        if ($clase === 'CastExprContext') {
+            $valor = $this->resolverValorConstanteExpr($exprCtx->expr());
+            $tipoDestino = $this->normalizarTipo($exprCtx->baseType()?->getText() ?? 'unknown');
+            if ($valor === null) {
+                return null;
+            }
+            if ($tipoDestino === 'int') {
+                return (int) $valor;
+            }
+            if ($tipoDestino === 'float') {
+                return (float) $valor;
+            }
+            if ($tipoDestino === 'bool') {
+                return (bool) $valor;
+            }
+            if ($tipoDestino === 'string') {
+                return (string) $valor;
+            }
+            return $valor;
+        }
+
         if ($clase === 'ArrayLiteralExprContext') {
             $exprs = $exprCtx->argList()?->expr() ?? [];
             $resultado = [];
@@ -1437,6 +1465,10 @@ final class GeneradorARM64 extends GolampiBaseVisitor
                 return substr($tipoBase, 2);
             }
             return 'unknown';
+        }
+
+        if ($clase === 'CastExprContext') {
+            return $this->normalizarTipo($exprCtx->baseType()?->getText() ?? 'unknown');
         }
 
         if ($clase === 'UnaryExprContext') {

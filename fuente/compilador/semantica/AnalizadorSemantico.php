@@ -185,7 +185,9 @@ final class AnalizadorSemantico extends GolampiBaseVisitor
 
     public function visitVarDecl($ctx): mixed
     {
-        $tipoDeclarado = $this->normalizarTipo($ctx->typeSpec()->getText());
+        $tipoDeclarado = $ctx->typeSpec() !== null
+            ? $this->normalizarTipo($ctx->typeSpec()->getText())
+            : null;
         $identificadores = $ctx->identifierList()->IDENTIFIER();
         $expresiones = $ctx->exprList()?->expr() ?? [];
         $tiposExpresiones = $this->expandirTiposDesdeExprList($expresiones);
@@ -202,10 +204,24 @@ final class AnalizadorSemantico extends GolampiBaseVisitor
         foreach ($identificadores as $indice => $identifier) {
             $name = $identifier->getText();
             $token = $identifier->getSymbol();
+            $tipoActual = $tipoDeclarado;
+
+            if ($tipoActual === null) {
+                $inferido = $tiposExpresiones[$indice] ?? self::TYPE_UNKNOWN;
+                $tipoActual = $this->normalizarTipo(is_string($inferido) ? $inferido : self::TYPE_UNKNOWN);
+                if ($tipoActual === self::TYPE_NIL) {
+                    $this->addSemanticError(
+                        "Declaracion var invalida: no se puede inferir tipo de '$name' desde nil.",
+                        $token->getLine(),
+                        $token->getCharPositionInLine()
+                    );
+                    $tipoActual = self::TYPE_UNKNOWN;
+                }
+            }
 
             $declared = $this->tablaSimbolos->declare(
                 $name,
-                $tipoDeclarado,
+                $tipoActual,
                 $token->getLine(),
                 $token->getCharPositionInLine()
             );
@@ -221,11 +237,11 @@ final class AnalizadorSemantico extends GolampiBaseVisitor
             if (isset($tiposExpresiones[$indice])) {
                 $exprType = $tiposExpresiones[$indice];
                 $this->assertAssignable(
-                    $tipoDeclarado,
+                    $tipoActual,
                     is_string($exprType) ? $exprType : self::TYPE_UNKNOWN,
                     $token->getLine(),
                     $token->getCharPositionInLine(),
-                    "No se puede inicializar '$name' de tipo '$tipoDeclarado' con valor de tipo '{$exprType}'."
+                    "No se puede inicializar '$name' de tipo '$tipoActual' con valor de tipo '{$exprType}'."
                 );
             }
         }
@@ -893,6 +909,62 @@ final class AnalizadorSemantico extends GolampiBaseVisitor
     public function visitGroupedExpr($ctx): mixed
     {
         return $this->visit($ctx->expr());
+    }
+
+    public function visitCastExpr($ctx): mixed
+    {
+        $tipoDestino = $this->normalizarTipo($ctx->baseType()->getText());
+        $tipoExpr = $this->visit($ctx->expr());
+        $tipoExpr = is_string($tipoExpr) ? $this->normalizarTipo($tipoExpr) : self::TYPE_UNKNOWN;
+
+        if ($tipoExpr === self::TYPE_ERROR) {
+            return self::TYPE_ERROR;
+        }
+
+        if ($tipoExpr === self::TYPE_UNKNOWN || $tipoExpr === self::TYPE_NIL) {
+            return $tipoDestino;
+        }
+
+        if ($tipoDestino === self::TYPE_INT || $tipoDestino === self::TYPE_FLOAT) {
+            if (!$this->isNumericType($tipoExpr)) {
+                $token = $ctx->getStart();
+                $this->addSemanticError(
+                    "Conversion invalida: no se puede convertir '$tipoExpr' a '$tipoDestino'.",
+                    $token->getLine(),
+                    $token->getCharPositionInLine()
+                );
+                return self::TYPE_ERROR;
+            }
+            return $tipoDestino;
+        }
+
+        if ($tipoDestino === self::TYPE_STRING) {
+            if ($this->isArrayType($tipoExpr) || str_starts_with($tipoExpr, '*')) {
+                $token = $ctx->getStart();
+                $this->addSemanticError(
+                    "Conversion invalida: no se puede convertir '$tipoExpr' a '$tipoDestino'.",
+                    $token->getLine(),
+                    $token->getCharPositionInLine()
+                );
+                return self::TYPE_ERROR;
+            }
+            return $tipoDestino;
+        }
+
+        if ($tipoDestino === self::TYPE_BOOL) {
+            if ($tipoExpr !== self::TYPE_BOOL) {
+                $token = $ctx->getStart();
+                $this->addSemanticError(
+                    "Conversion invalida: no se puede convertir '$tipoExpr' a '$tipoDestino'.",
+                    $token->getLine(),
+                    $token->getCharPositionInLine()
+                );
+                return self::TYPE_ERROR;
+            }
+            return self::TYPE_BOOL;
+        }
+
+        return $tipoDestino;
     }
 
     public function visitUnaryExpr($ctx): mixed

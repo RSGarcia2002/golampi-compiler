@@ -98,7 +98,7 @@ continueStmt
     ;
 
 varDecl
-    : 'var' identifierList typeSpec ('=' exprList)?
+    : 'var' identifierList (typeSpec ('=' exprList)? | '=' exprList)
     ;
 
 constDecl
@@ -181,6 +181,7 @@ expr
     | expr '&&' expr                    # binaryExpr
     | expr '||' expr                    # binaryExpr
     | '(' expr ')'                      # groupedExpr
+    | baseType '(' expr ')'             # castExpr
     | IDENTIFIER '(' argList? ')'       # callExpr
     | '[' INT_LITERAL ']' typeSpec '{' exprList? '}' # typedArrayLiteralExpr
     | '{' exprList? '}'                 # braceArrayLiteralExpr

@@ -26,6 +26,7 @@ param
 
 returnType
     : typeSpec
+    | '(' typeSpec (',' typeSpec)* ')'
     ;
 
 block
@@ -109,8 +110,9 @@ shortVarDecl
     ;
 
 typeSpec
-    : baseType
-    | '[' ']' baseType
+    : '*' typeSpec
+    | '[' INT_LITERAL? ']' typeSpec
+    | baseType
     ;
 
 baseType
@@ -124,7 +126,13 @@ baseType
     ;
 
 assignment
-    : IDENTIFIER assignOp expr
+    : assignTarget assignOp expr
+    ;
+
+assignTarget
+    : IDENTIFIER
+    | '*' IDENTIFIER
+    | IDENTIFIER '[' expr ']'
     ;
 
 postStmt
@@ -145,7 +153,7 @@ printStmt
     ;
 
 returnStmt
-    : 'return' expr?
+    : 'return' exprList?
     ;
 
 argList
@@ -163,6 +171,9 @@ exprList
 expr
     : '!' expr                          # unaryExpr
     | '-' expr                          # unaryExpr
+    | '&' expr                          # unaryExpr
+    | '*' expr                          # unaryExpr
+    | expr '[' expr ']'                 # indexExpr
     | expr ('*' | '/' | '%') expr       # binaryExpr
     | expr ('+' | '-') expr             # binaryExpr
     | expr ('<' | '<=' | '>' | '>=') expr # binaryExpr
@@ -171,6 +182,7 @@ expr
     | expr '||' expr                    # binaryExpr
     | '(' expr ')'                      # groupedExpr
     | IDENTIFIER '(' argList? ')'       # callExpr
+    | '[' INT_LITERAL ']' typeSpec '{' exprList? '}' # typedArrayLiteralExpr
     | '[' argList? ']'                  # arrayLiteralExpr
     | literal                           # literalExpr
     | IDENTIFIER                        # identifierExpr

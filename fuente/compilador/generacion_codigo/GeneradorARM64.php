@@ -343,7 +343,14 @@ final class GeneradorARM64 extends GolampiBaseVisitor
 
     public function visitAssignment($ctx): mixed
     {
-        $nombre = $ctx->IDENTIFIER()?->getText() ?? '';
+        $targetText = $ctx->assignTarget()?->getText() ?? '';
+        if (preg_match('/^\*?([a-zA-Z_][a-zA-Z_0-9]*)/', $targetText, $matches) !== 1) {
+            $this->emit('    // asignacion compleja no soportada en backend base');
+            $this->compilarExprEnX0($ctx->expr());
+            return null;
+        }
+
+        $nombre = $matches[1];
         if ($nombre === '') {
             return null;
         }
@@ -403,8 +410,9 @@ final class GeneradorARM64 extends GolampiBaseVisitor
     public function visitReturnStmt($ctx): mixed
     {
         $this->emit('    // return de funcion');
-        if ($ctx->expr() !== null) {
-            $this->compilarExprEnX0($ctx->expr());
+        $exprs = $ctx->exprList()?->expr() ?? [];
+        if (isset($exprs[0])) {
+            $this->compilarExprEnX0($exprs[0]);
         }
 
         $this->emit('    b ' . $this->etiquetaSalidaFuncion($this->funcionActual));

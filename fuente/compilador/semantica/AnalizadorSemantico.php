@@ -188,8 +188,9 @@ final class AnalizadorSemantico extends GolampiBaseVisitor
         $tipoDeclarado = $this->normalizarTipo($ctx->typeSpec()->getText());
         $identificadores = $ctx->identifierList()->IDENTIFIER();
         $expresiones = $ctx->exprList()?->expr() ?? [];
+        $tiposExpresiones = $this->expandirTiposDesdeExprList($expresiones);
 
-        if ($expresiones !== [] && count($expresiones) !== count($identificadores)) {
+        if ($tiposExpresiones !== [] && count($tiposExpresiones) !== count($identificadores)) {
             $token = $ctx->getStart();
             $this->addSemanticError(
                 'Declaracion var invalida: cantidad de identificadores y expresiones no coincide.',
@@ -217,8 +218,8 @@ final class AnalizadorSemantico extends GolampiBaseVisitor
                 );
             }
 
-            if (isset($expresiones[$indice])) {
-                $exprType = $this->visit($expresiones[$indice]);
+            if (isset($tiposExpresiones[$indice])) {
+                $exprType = $tiposExpresiones[$indice];
                 $this->assertAssignable(
                     $tipoDeclarado,
                     is_string($exprType) ? $exprType : self::TYPE_UNKNOWN,
@@ -237,8 +238,9 @@ final class AnalizadorSemantico extends GolampiBaseVisitor
         $tipoDeclarado = $this->normalizarTipo($ctx->typeSpec()->getText());
         $identificadores = $ctx->identifierList()->IDENTIFIER();
         $expresiones = $ctx->exprList()?->expr() ?? [];
+        $tiposExpresiones = $this->expandirTiposDesdeExprList($expresiones);
 
-        if (count($expresiones) !== count($identificadores)) {
+        if (count($tiposExpresiones) !== count($identificadores)) {
             $token = $ctx->getStart();
             $this->addSemanticError(
                 'Declaracion const invalida: cantidad de identificadores y expresiones no coincide.',
@@ -268,8 +270,8 @@ final class AnalizadorSemantico extends GolampiBaseVisitor
                 continue;
             }
 
-            if (isset($expresiones[$indice])) {
-                $exprType = $this->visit($expresiones[$indice]);
+            if (isset($tiposExpresiones[$indice])) {
+                $exprType = $tiposExpresiones[$indice];
                 $this->assertAssignable(
                     $tipoDeclarado,
                     is_string($exprType) ? $exprType : self::TYPE_UNKNOWN,
@@ -287,9 +289,10 @@ final class AnalizadorSemantico extends GolampiBaseVisitor
     {
         $identificadores = $ctx->identifierList()->IDENTIFIER();
         $expresiones = $ctx->exprList()->expr();
+        $tiposExpresiones = $this->expandirTiposDesdeExprList($expresiones);
         $token = $ctx->getStart();
 
-        if (count($identificadores) !== count($expresiones)) {
+        if (count($identificadores) !== count($tiposExpresiones)) {
             $this->addSemanticError(
                 'Declaracion corta invalida: cantidad de identificadores y expresiones no coincide.',
                 $token->getLine(),
@@ -297,13 +300,12 @@ final class AnalizadorSemantico extends GolampiBaseVisitor
             );
         }
 
-        $limite = min(count($identificadores), count($expresiones));
+        $limite = min(count($identificadores), count($tiposExpresiones));
         for ($i = 0; $i < $limite; $i++) {
             $id = $identificadores[$i];
             $name = $id->getText();
             $idToken = $id->getSymbol();
-            $exprType = $this->visit($expresiones[$i]);
-            $exprType = is_string($exprType) ? $this->normalizarTipo($exprType) : self::TYPE_UNKNOWN;
+            $exprType = $this->normalizarTipo($tiposExpresiones[$i]);
 
             if ($exprType === self::TYPE_NIL) {
                 $this->addSemanticError(
@@ -335,9 +337,14 @@ final class AnalizadorSemantico extends GolampiBaseVisitor
 
     public function visitAssignment($ctx): mixed
     {
-        $identifier = $ctx->IDENTIFIER();
-        $name = $identifier->getText();
-        $token = $identifier->getSymbol();
+        $targetText = $ctx->assignTarget()->getText();
+        if (preg_match('/^\*?([a-zA-Z_][a-zA-Z_0-9]*)/', $targetText, $matches) !== 1) {
+            $this->visit($ctx->expr());
+            return self::TYPE_ERROR;
+        }
+
+        $name = $matches[1];
+        $token = $ctx->assignTarget()->getStart();
 
         $resolved = $this->tablaSimbolos->resolve($name);
         if ($resolved === null) {
@@ -361,7 +368,16 @@ final class AnalizadorSemantico extends GolampiBaseVisitor
         }
 
         $exprType = $this->visit($ctx->expr());
-        $targetType = (string) ($resolved['type'] ?? self::TYPE_UNKNOWN);
+        $targetType = $this->normalizarTipo((string) ($resolved['type'] ?? self::TYPE_UNKNOWN));
+        if (str_starts_with($targetText, '*') && str_starts_with($targetType, '*')) {
+            $targetType = substr($targetType, 1);
+        }
+        if (str_contains($targetText, '[') && str_starts_with($targetType, '*')) {
+            $targetType = substr($targetType, 1);
+        }
+        if (str_contains($targetText, '[') && str_starts_with($targetType, self::TYPE_ARRAY_PREFIX)) {
+            $targetType = substr($targetType, strlen(self::TYPE_ARRAY_PREFIX));
+        }
         $operator = $ctx->assignOp()->getText();
 
         if ($operator !== '=') {
@@ -737,38 +753,102 @@ final class AnalizadorSemantico extends GolampiBaseVisitor
         $funcionActual = $this->pilaFunciones[count($this->pilaFunciones) - 1] ?? null;
         $retornosEsperados = $funcionActual['retorno'] ?? [];
 
+        $retornosRecibidos = $this->expandirTiposDesdeExprList($ctx->exprList()?->expr() ?? []);
+
         if ($retornosEsperados === []) {
-            if ($ctx->expr() !== null) {
+            if ($retornosRecibidos !== []) {
                 $this->addSemanticError(
                     "Return invalido: la funcion '{$funcionActual['nombre']}' no retorna valor.",
                     $token->getLine(),
                     $token->getCharPositionInLine()
                 );
-                $this->visit($ctx->expr());
             }
             return null;
         }
 
-        if ($ctx->expr() === null) {
+        if ($retornosRecibidos === []) {
             $this->addSemanticError(
-                "Return invalido: la funcion '{$funcionActual['nombre']}' debe retornar '{$retornosEsperados[0]}'.",
+                "Return invalido: la funcion '{$funcionActual['nombre']}' debe retornar valor(es).",
                 $token->getLine(),
                 $token->getCharPositionInLine()
             );
             return null;
         }
 
-        $tipoRetorno = $this->visit($ctx->expr());
-        $tipoRetorno = is_string($tipoRetorno) ? $tipoRetorno : self::TYPE_UNKNOWN;
-        $this->assertAssignable(
-            $retornosEsperados[0],
-            $tipoRetorno,
-            $token->getLine(),
-            $token->getCharPositionInLine(),
-            "Return invalido: se esperaba '{$retornosEsperados[0]}' y se recibio '$tipoRetorno'."
-        );
+        if (count($retornosEsperados) !== count($retornosRecibidos)) {
+            $this->addSemanticError(
+                "Return invalido: se esperaban " . count($retornosEsperados)
+                . " valor(es) y se recibieron " . count($retornosRecibidos) . ".",
+                $token->getLine(),
+                $token->getCharPositionInLine()
+            );
+            return null;
+        }
+
+        $limite = min(count($retornosEsperados), count($retornosRecibidos));
+        for ($i = 0; $i < $limite; $i++) {
+            $esperado = $this->normalizarTipo($retornosEsperados[$i]);
+            $recibido = $this->normalizarTipo($retornosRecibidos[$i]);
+            $this->assertAssignable(
+                $esperado,
+                $recibido,
+                $token->getLine(),
+                $token->getCharPositionInLine(),
+                "Return invalido: se esperaba '$esperado' y se recibio '$recibido'."
+            );
+        }
 
         return null;
+    }
+
+    public function visitIndexExpr($ctx): mixed
+    {
+        $baseType = $this->visit($ctx->expr(0));
+        $indexType = $this->visit($ctx->expr(1));
+
+        $baseType = is_string($baseType) ? $this->normalizarTipo($baseType) : self::TYPE_UNKNOWN;
+        $indexType = is_string($indexType) ? $this->normalizarTipo($indexType) : self::TYPE_UNKNOWN;
+
+        if ($indexType !== self::TYPE_INT && $indexType !== self::TYPE_ERROR) {
+            $token = $ctx->expr(1)->getStart();
+            $this->addSemanticError(
+                "Indice invalido: se esperaba int y se recibio '$indexType'.",
+                $token->getLine(),
+                $token->getCharPositionInLine()
+            );
+        }
+
+        if (str_starts_with($baseType, '*')) {
+            $baseType = substr($baseType, 1);
+        }
+
+        if (str_starts_with($baseType, self::TYPE_ARRAY_PREFIX)) {
+            return substr($baseType, strlen(self::TYPE_ARRAY_PREFIX));
+        }
+
+        return self::TYPE_UNKNOWN;
+    }
+
+    public function visitTypedArrayLiteralExpr($ctx): mixed
+    {
+        $tipoElemento = $this->normalizarTipo($ctx->typeSpec()->getText());
+        foreach ($ctx->exprList()?->expr() ?? [] as $expr) {
+            $tipoActual = $this->visit($expr);
+            $tipoActual = is_string($tipoActual) ? $this->normalizarTipo($tipoActual) : self::TYPE_UNKNOWN;
+            if ($tipoActual === self::TYPE_ERROR || $tipoActual === self::TYPE_UNKNOWN) {
+                continue;
+            }
+            if (!$this->tiposCompatiblesAsignacion($tipoElemento, $tipoActual)) {
+                $token = $expr->getStart();
+                $this->addSemanticError(
+                    "Literal de arreglo tipado invalido: se esperaba '$tipoElemento' y se recibio '$tipoActual'.",
+                    $token->getLine(),
+                    $token->getCharPositionInLine()
+                );
+            }
+        }
+
+        return self::TYPE_ARRAY_PREFIX . $tipoElemento;
     }
 
     public function visitGroupedExpr($ctx): mixed
@@ -808,6 +888,28 @@ final class AnalizadorSemantico extends GolampiBaseVisitor
                 return self::TYPE_ERROR;
             }
             return $exprType;
+        }
+
+        if ($operator === '&') {
+            if ($exprType === self::TYPE_ERROR) {
+                return self::TYPE_ERROR;
+            }
+            return '*' . $exprType;
+        }
+
+        if ($operator === '*') {
+            if (str_starts_with($exprType, '*')) {
+                return substr($exprType, 1);
+            }
+            if ($exprType !== self::TYPE_UNKNOWN && $exprType !== self::TYPE_ERROR) {
+                $this->addSemanticError(
+                    "Operacion invalida: '*' unario requiere puntero y se recibio '$exprType'.",
+                    $line,
+                    $column
+                );
+                return self::TYPE_ERROR;
+            }
+            return self::TYPE_UNKNOWN;
         }
 
         return self::TYPE_UNKNOWN;
@@ -1046,13 +1148,55 @@ final class AnalizadorSemantico extends GolampiBaseVisitor
         if ($returnTypeCtx === null) {
             return [];
         }
-        return [$this->normalizarTipo($returnTypeCtx->typeSpec()->getText())];
+        $tipos = [];
+        foreach ($returnTypeCtx->typeSpec() as $typeCtx) {
+            $tipos[] = $this->normalizarTipo($typeCtx->getText());
+        }
+        return $tipos;
+    }
+
+    /**
+     * @param array<int,mixed> $exprs
+     * @return array<int,string>
+     */
+    private function expandirTiposDesdeExprList(array $exprs): array
+    {
+        $tipos = [];
+        foreach ($exprs as $expr) {
+            $clase = (new ReflectionClass($expr))->getShortName();
+            if ($clase === 'CallExprContext') {
+                $nombre = $expr->IDENTIFIER()?->getText() ?? '';
+                if ($nombre !== '' && isset($this->firmasFunciones[$nombre])) {
+                    $firma = $this->firmasFunciones[$nombre];
+                    if ($firma['retorno'] !== []) {
+                        foreach ($firma['retorno'] as $tipoRet) {
+                            $tipos[] = $this->normalizarTipo($tipoRet);
+                        }
+                        // valida argumentos de la llamada también
+                        $this->visit($expr);
+                        continue;
+                    }
+                }
+            }
+
+            $tipo = $this->visit($expr);
+            $tipos[] = is_string($tipo) ? $this->normalizarTipo($tipo) : self::TYPE_UNKNOWN;
+        }
+        return $tipos;
     }
 
     private function normalizarTipo(string $tipo): string
     {
+        if (str_starts_with($tipo, '*')) {
+            return '*' . $this->normalizarTipo(substr($tipo, 1));
+        }
+
         if (str_starts_with($tipo, self::TYPE_ARRAY_PREFIX)) {
             return self::TYPE_ARRAY_PREFIX . $this->normalizarTipo(substr($tipo, 2));
+        }
+
+        if (preg_match('/^\[[0-9]+\](.+)$/', $tipo, $matches) === 1) {
+            return self::TYPE_ARRAY_PREFIX . $this->normalizarTipo($matches[1]);
         }
 
         return match ($tipo) {

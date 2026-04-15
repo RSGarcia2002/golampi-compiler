@@ -209,6 +209,11 @@ final class GeneradorARM64 extends GolampiBaseVisitor
             return;
         }
 
+        if ($statement->postStmt() !== null) {
+            $this->visitPostStmt($statement->postStmt());
+            return;
+        }
+
         if ($statement->returnStmt() !== null) {
             $this->visitReturnStmt($statement->returnStmt());
             return;
@@ -503,8 +508,18 @@ final class GeneradorARM64 extends GolampiBaseVisitor
         $this->pilaBucles[] = ['cond' => $etiquetaCond, 'end' => $etiquetaFin];
         $this->pilaControl[] = ['tipo' => 'for', 'end' => $etiquetaFin, 'cond' => $etiquetaCond];
 
+        if ($ctx->forClause() !== null && $ctx->forClause()->forInit() !== null) {
+            $this->emit('    // inicializacion del for clasico');
+            $this->compilarForComponente($ctx->forClause()->forInit());
+        }
+
         $this->emit($etiquetaCond . ':');
-        if ($ctx->expr() !== null) {
+        if ($ctx->forClause() !== null && $ctx->forClause()->expr() !== null) {
+            $this->emit('    // evaluar condicion del for clasico');
+            $this->compilarExprEnX0($ctx->forClause()->expr());
+            $this->emit('    cmp x0, #0');
+            $this->emit('    beq ' . $etiquetaFin);
+        } elseif ($ctx->expr() !== null) {
             $this->emit('    // evaluar condicion del for');
             $this->compilarExprEnX0($ctx->expr());
             $this->emit('    cmp x0, #0');
@@ -512,10 +527,38 @@ final class GeneradorARM64 extends GolampiBaseVisitor
         }
 
         $this->compilarBloque($ctx->block());
+        if ($ctx->forClause() !== null && $ctx->forClause()->forPost() !== null) {
+            $this->emit('    // actualizacion del for clasico');
+            $this->compilarForComponente($ctx->forClause()->forPost());
+        }
         $this->emit('    b ' . $etiquetaCond);
         $this->emit($etiquetaFin . ':');
         array_pop($this->pilaBucles);
         array_pop($this->pilaControl);
+
+        return null;
+    }
+
+    public function visitPostStmt($ctx): mixed
+    {
+        $nombre = $ctx->IDENTIFIER()?->getText() ?? '';
+        if ($nombre === '') {
+            return null;
+        }
+
+        if (!isset($this->variablesLocales[$nombre])) {
+            $this->variablesLocales[$nombre] = $this->reservarSlot($nombre);
+        }
+
+        $operador = $ctx->children[1]?->getText() ?? '++';
+        $this->emit("    // post-operador: {$nombre}{$operador}");
+        $this->emit('    ldr x0, [x29, #' . $this->variablesLocales[$nombre] . ']');
+        if ($operador === '--') {
+            $this->emit('    sub x0, x0, #1');
+        } else {
+            $this->emit('    add x0, x0, #1');
+        }
+        $this->emit('    str x0, [x29, #' . $this->variablesLocales[$nombre] . ']');
 
         return null;
     }
@@ -1196,6 +1239,51 @@ final class GeneradorARM64 extends GolampiBaseVisitor
             return 'float';
         }
         return $tipo;
+    }
+
+    private function compilarForComponente($ctx): void
+    {
+        if ($ctx === null) {
+            return;
+        }
+
+        if (method_exists($ctx, 'shortVarDecl') && $ctx->shortVarDecl() !== null) {
+            $this->visitShortVarDecl($ctx->shortVarDecl());
+            return;
+        }
+
+        if (method_exists($ctx, 'assignment') && $ctx->assignment() !== null) {
+            $this->visitAssignment($ctx->assignment());
+            return;
+        }
+
+        if (method_exists($ctx, 'postStmt') && $ctx->postStmt() !== null) {
+            $this->visitPostStmt($ctx->postStmt());
+            return;
+        }
+
+        if (method_exists($ctx, 'expr') && $ctx->expr() !== null) {
+            $this->compilarExprEnX0($ctx->expr());
+            return;
+        }
+
+        // fallback para contexts directos
+        $clase = (new ReflectionClass($ctx))->getShortName();
+        if (str_contains($clase, 'ShortVarDecl')) {
+            $this->visitShortVarDecl($ctx);
+            return;
+        }
+        if (str_contains($clase, 'Assignment')) {
+            $this->visitAssignment($ctx);
+            return;
+        }
+        if (str_contains($clase, 'PostStmt')) {
+            $this->visitPostStmt($ctx);
+            return;
+        }
+        if (str_contains($clase, 'Expr')) {
+            $this->compilarExprEnX0($ctx);
+        }
     }
 
     private function esTipoArreglo(string $tipo): bool

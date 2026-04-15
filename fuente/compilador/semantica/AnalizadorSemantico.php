@@ -22,6 +22,7 @@ final class AnalizadorSemantico extends GolampiBaseVisitor
     private array $errors = [];
 
     private int $blockCounter = 0;
+    private int $forCounter = 0;
     private int $nivelBucles = 0;
     private int $nivelSwitch = 0;
 
@@ -558,6 +559,47 @@ final class AnalizadorSemantico extends GolampiBaseVisitor
 
     public function visitForStmt($ctx): mixed
     {
+        $this->forCounter++;
+        $inicio = $ctx->getStart();
+        $this->tablaSimbolos->enterScope(
+            'for_' . $this->forCounter,
+            'for',
+            $inicio->getLine(),
+            $inicio->getCharPositionInLine()
+        );
+
+        if ($ctx->forClause() !== null) {
+            $clausula = $ctx->forClause();
+            if ($clausula->forInit() !== null) {
+                $this->visit($clausula->forInit());
+            }
+
+            if ($clausula->expr() !== null) {
+                $tipoCondicion = $this->visit($clausula->expr());
+                if (!is_string($tipoCondicion)) {
+                    $tipoCondicion = self::TYPE_UNKNOWN;
+                }
+
+                if ($tipoCondicion !== self::TYPE_BOOL && $tipoCondicion !== self::TYPE_ERROR) {
+                    $this->addSemanticError(
+                        "Condicion invalida en for: se esperaba 'bool' y se recibio '$tipoCondicion'.",
+                        $clausula->expr()->getStart()->getLine(),
+                        $clausula->expr()->getStart()->getCharPositionInLine()
+                    );
+                }
+            }
+
+            $this->nivelBucles++;
+            $resultado = $this->visit($ctx->block());
+            if ($clausula->forPost() !== null) {
+                $this->visit($clausula->forPost());
+            }
+            $this->nivelBucles--;
+            $this->tablaSimbolos->exitScope();
+
+            return $resultado;
+        }
+
         if ($ctx->expr() !== null) {
             $tipoCondicion = $this->visit($ctx->expr());
             if (!is_string($tipoCondicion)) {
@@ -576,8 +618,47 @@ final class AnalizadorSemantico extends GolampiBaseVisitor
         $this->nivelBucles++;
         $resultado = $this->visit($ctx->block());
         $this->nivelBucles--;
+        $this->tablaSimbolos->exitScope();
 
         return $resultado;
+    }
+
+    public function visitPostStmt($ctx): mixed
+    {
+        $identifier = $ctx->IDENTIFIER();
+        $name = $identifier->getText();
+        $token = $identifier->getSymbol();
+
+        $resolved = $this->tablaSimbolos->resolve($name);
+        if ($resolved === null) {
+            $this->addSemanticError(
+                "Variable '$name' usada sin declaracion previa.",
+                $token->getLine(),
+                $token->getCharPositionInLine()
+            );
+            return self::TYPE_ERROR;
+        }
+
+        if (($resolved['kind'] ?? '') === 'constante') {
+            $this->addSemanticError(
+                "Operacion invalida: '$name' es constante y no puede modificarse.",
+                $token->getLine(),
+                $token->getCharPositionInLine()
+            );
+            return self::TYPE_ERROR;
+        }
+
+        $targetType = $this->normalizarTipo((string) ($resolved['type'] ?? self::TYPE_UNKNOWN));
+        if (!$this->isNumericType($targetType)) {
+            $this->addSemanticError(
+                "Operacion invalida: incremento/decremento requiere tipo numerico y '$name' es '$targetType'.",
+                $token->getLine(),
+                $token->getCharPositionInLine()
+            );
+            return self::TYPE_ERROR;
+        }
+
+        return null;
     }
 
     public function visitSwitchStmt($ctx): mixed

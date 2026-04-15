@@ -37,6 +37,7 @@ statement
     | constDecl ';'?
     | shortVarDecl ';'?
     | assignment ';'?
+    | postStmt ';'?
     | printStmt ';'?
     | returnStmt ';'?
     | ifStmt
@@ -53,7 +54,26 @@ ifStmt
     ;
 
 forStmt
-    : 'for' expr? block
+    : 'for' forClause block
+    | 'for' expr block
+    | 'for' block
+    ;
+
+forClause
+    : forInit? ';' expr? ';' forPost?
+    ;
+
+forInit
+    : shortVarDecl
+    | assignment
+    | postStmt
+    | expr
+    ;
+
+forPost
+    : postStmt
+    | assignment
+    | expr
     ;
 
 switchStmt
@@ -105,6 +125,10 @@ baseType
 
 assignment
     : IDENTIFIER assignOp expr
+    ;
+
+postStmt
+    : IDENTIFIER ('++' | '--')
     ;
 
 assignOp

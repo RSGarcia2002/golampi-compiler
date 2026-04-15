@@ -39,6 +39,8 @@ final class GeneradorARM64 extends GolampiBaseVisitor
 
     /** @var array<string,string> */
     private array $valoresStringConocidos = [];
+    /** @var array<string,string> */
+    private array $valoresFloatConocidos = [];
 
     private int $contadorStrings = 0;
     private bool $usaRuntimePrint = false;
@@ -53,6 +55,7 @@ final class GeneradorARM64 extends GolampiBaseVisitor
         $this->etiquetaPorString = [];
         $this->stringPorEtiqueta = [];
         $this->valoresStringConocidos = [];
+        $this->valoresFloatConocidos = [];
         $this->contadorStrings = 0;
         $this->usaRuntimePrint = false;
 
@@ -139,6 +142,7 @@ final class GeneradorARM64 extends GolampiBaseVisitor
         $this->longitudesConocidas = [];
         $this->tiposVariables = [];
         $this->valoresStringConocidos = [];
+        $this->valoresFloatConocidos = [];
 
         $this->emit('.global ' . $nombre);
         $this->emit($nombre . ':');
@@ -262,6 +266,11 @@ final class GeneradorARM64 extends GolampiBaseVisitor
             if ($stringConst !== null) {
                 $this->valoresStringConocidos[$nombre] = $stringConst;
             }
+
+            $floatConst = $this->resolverFloatConstante($ctx->expr());
+            if ($floatConst !== null) {
+                $this->valoresFloatConocidos[$nombre] = $floatConst;
+            }
             return null;
         }
 
@@ -300,6 +309,13 @@ final class GeneradorARM64 extends GolampiBaseVisitor
             unset($this->valoresStringConocidos[$nombre]);
         }
 
+        $floatConst = $this->resolverFloatConstante($ctx->expr());
+        if ($floatConst !== null) {
+            $this->valoresFloatConocidos[$nombre] = $floatConst;
+        } else {
+            unset($this->valoresFloatConocidos[$nombre]);
+        }
+
         return null;
     }
 
@@ -331,17 +347,15 @@ final class GeneradorARM64 extends GolampiBaseVisitor
         }
 
         $this->usaRuntimePrint = true;
-        foreach ($argumentos as $arg) {
+        $totalArgs = count($argumentos);
+        foreach ($argumentos as $indice => $arg) {
             $this->compilarExprEnX0($arg);
 
             $tipo = $this->tipoAproximadoExpr($arg);
             $this->emit("    // argumento println tipo: {$tipo}");
             if ($tipo === 'string') {
                 $this->emit('    bl _golampi_print_cstr');
-                continue;
-            }
-
-            if ($tipo === 'bool') {
+            } elseif ($tipo === 'bool') {
                 $this->emit('    cmp x0, #0');
                 $etiquetaTrue = $this->nuevaEtiqueta('print_bool_true');
                 $etiquetaFin = $this->nuevaEtiqueta('print_bool_fin');
@@ -353,10 +367,26 @@ final class GeneradorARM64 extends GolampiBaseVisitor
                 $this->emit('    ldr x0, =L_bool_true');
                 $this->emit('    bl _golampi_print_cstr');
                 $this->emit($etiquetaFin . ':');
-                continue;
+            } elseif ($tipo === 'float') {
+                $valorFloat = $this->resolverFloatConstante($arg);
+                if ($valorFloat !== null) {
+                    $this->emit('    // float constante materializado como string');
+                    $etiquetaFloat = $this->registrarLiteralString($valorFloat);
+                    $this->emit('    ldr x0, =' . $etiquetaFloat);
+                    $this->emit('    bl _golampi_print_cstr');
+                } else {
+                    $this->emit('    // float no constante: salida aproximada como entero');
+                    $this->emit('    bl _golampi_print_int');
+                }
+            } else {
+                $this->emit('    bl _golampi_print_int');
             }
 
-            $this->emit('    bl _golampi_print_int');
+            if ($indice < ($totalArgs - 1)) {
+                $this->emit('    // separador entre argumentos println');
+                $this->emit('    ldr x0, =L_espacio');
+                $this->emit('    bl _golampi_print_cstr');
+            }
         }
         $this->emit('    bl _golampi_print_nl');
 
@@ -796,6 +826,12 @@ final class GeneradorARM64 extends GolampiBaseVisitor
             return;
         }
 
+        if (preg_match('/^-?\d+\.\d+$/', $texto) === 1) {
+            $this->emit('    // literal float (aprox. entero para ejecucion base)');
+            $this->emit('    ldr x0, =' . (int) ((float) $texto));
+            return;
+        }
+
         if ($texto === 'true') {
             $this->emit('    // literal booleano true');
             $this->emit('    mov x0, #1');
@@ -939,6 +975,31 @@ final class GeneradorARM64 extends GolampiBaseVisitor
         return null;
     }
 
+    private function resolverFloatConstante($exprCtx): ?string
+    {
+        if ($exprCtx === null) {
+            return null;
+        }
+
+        $clase = (new ReflectionClass($exprCtx))->getShortName();
+        if ($clase === 'LiteralExprContext') {
+            $texto = $exprCtx->literal()?->getText() ?? '';
+            if (preg_match('/^-?\d+\.\d+$/', $texto) === 1) {
+                return $texto;
+            }
+            return null;
+        }
+
+        if ($clase === 'IdentifierExprContext') {
+            $nombre = $exprCtx->IDENTIFIER()?->getText() ?? '';
+            if ($nombre !== '' && isset($this->valoresFloatConocidos[$nombre])) {
+                return $this->valoresFloatConocidos[$nombre];
+            }
+        }
+
+        return null;
+    }
+
     private function tipoAproximadoExpr($exprCtx): string
     {
         if ($exprCtx === null) {
@@ -963,6 +1024,9 @@ final class GeneradorARM64 extends GolampiBaseVisitor
             if (preg_match('/^-?\d+$/', $texto) === 1) {
                 return 'int';
             }
+            if (preg_match('/^-?\d+\.\d+$/', $texto) === 1) {
+                return 'float';
+            }
             if ($texto === 'true' || $texto === 'false') {
                 return 'bool';
             }
@@ -985,6 +1049,11 @@ final class GeneradorARM64 extends GolampiBaseVisitor
             $operador = $exprCtx->children[1]?->getText() ?? '';
             if (in_array($operador, ['==', '!=', '<', '<=', '>', '>=', '&&', '||'], true)) {
                 return 'bool';
+            }
+            $tipoIzq = $this->tipoAproximadoExpr($exprCtx->expr(0));
+            $tipoDer = $this->tipoAproximadoExpr($exprCtx->expr(1));
+            if ($tipoIzq === 'float' || $tipoDer === 'float') {
+                return 'float';
             }
             return 'int';
         }
@@ -1138,6 +1207,8 @@ final class GeneradorARM64 extends GolampiBaseVisitor
                 $this->emit('');
                 $this->emit('.section .rodata');
             }
+            $this->emit('L_espacio:');
+            $this->emit('    .asciz " "');
             $this->emit('L_nueva_linea:');
             $this->emit('    .asciz "\\n"');
             $this->emit('L_bool_true:');

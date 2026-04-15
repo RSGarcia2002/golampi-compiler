@@ -92,3 +92,7 @@ Salida ARM64 (fase 4 base avanzada):
 5. Commit atómico con mensaje claro.
 
 Ver detalle en `documentacion/PLAN_PROYECTO.md` y `documentacion/GUIA_COMMITS.md`.
+
+## Documentación formal
+- Manual de Usuario: `documentacion/MANUAL_USUARIO.md`
+- Manual Técnico: `documentacion/MANUAL_TECNICO.md`

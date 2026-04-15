@@ -1,7 +1,7 @@
 grammar Golampi;
 
 program
-    : packageDecl functionDecl* mainFunction functionDecl* EOF
+    : packageDecl? functionDecl* mainFunction functionDecl* EOF
     ;
 
 packageDecl
@@ -33,17 +33,18 @@ block
     ;
 
 statement
-    : varDecl ';'
-    | constDecl ';'
-    | assignment ';'
-    | printStmt ';'
-    | returnStmt ';'
+    : varDecl ';'?
+    | constDecl ';'?
+    | shortVarDecl ';'?
+    | assignment ';'?
+    | printStmt ';'?
+    | returnStmt ';'?
     | ifStmt
     | forStmt
     | switchStmt
-    | breakStmt ';'
-    | continueStmt ';'
-    | expr ';'
+    | breakStmt ';'?
+    | continueStmt ';'?
+    | expr ';'?
     | block
     ;
 
@@ -76,11 +77,15 @@ continueStmt
     ;
 
 varDecl
-    : 'var' IDENTIFIER typeSpec ('=' expr)?
+    : 'var' identifierList typeSpec ('=' exprList)?
     ;
 
 constDecl
-    : 'const' IDENTIFIER typeSpec '=' expr
+    : 'const' identifierList typeSpec '=' exprList
+    ;
+
+shortVarDecl
+    : identifierList ':=' exprList
     ;
 
 typeSpec
@@ -90,13 +95,25 @@ typeSpec
 
 baseType
     : 'int'
+    | 'int32'
     | 'float'
+    | 'float32'
     | 'bool'
+    | 'rune'
     | 'string'
     ;
 
 assignment
-    : IDENTIFIER '=' expr
+    : IDENTIFIER assignOp expr
+    ;
+
+assignOp
+    : '='
+    | '+='
+    | '-='
+    | '*='
+    | '/='
+    | '%='
     ;
 
 printStmt
@@ -108,6 +125,14 @@ returnStmt
     ;
 
 argList
+    : expr (',' expr)*
+    ;
+
+identifierList
+    : IDENTIFIER (',' IDENTIFIER)*
+    ;
+
+exprList
     : expr (',' expr)*
     ;
 
@@ -130,6 +155,7 @@ expr
 literal
     : INT_LITERAL
     | FLOAT_LITERAL
+    | CHAR_LITERAL
     | STRING_LITERAL
     | 'true'
     | 'false'
@@ -146,6 +172,10 @@ FLOAT_LITERAL
 
 STRING_LITERAL
     : '"' ( '\\' . | ~["\\] )* '"'
+    ;
+
+CHAR_LITERAL
+    : '\'' ( '\\' . | ~['\\] ) '\''
     ;
 
 IDENTIFIER

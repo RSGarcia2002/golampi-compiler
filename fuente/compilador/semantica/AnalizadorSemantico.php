@@ -10,6 +10,7 @@ final class AnalizadorSemantico extends GolampiBaseVisitor
     private const TYPE_FLOAT = 'float';
     private const TYPE_BOOL = 'bool';
     private const TYPE_STRING = 'string';
+    private const TYPE_RUNE = 'rune';
     private const TYPE_NIL = 'nil';
     private const TYPE_UNKNOWN = 'unknown';
     private const TYPE_ERROR = 'error';
@@ -183,35 +184,48 @@ final class AnalizadorSemantico extends GolampiBaseVisitor
 
     public function visitVarDecl($ctx): mixed
     {
-        $identifier = $ctx->IDENTIFIER();
-        $name = $identifier->getText();
-        $type = $ctx->typeSpec()->getText();
-        $token = $identifier->getSymbol();
+        $tipoDeclarado = $this->normalizarTipo($ctx->typeSpec()->getText());
+        $identificadores = $ctx->identifierList()->IDENTIFIER();
+        $expresiones = $ctx->exprList()?->expr() ?? [];
 
-        $declared = $this->tablaSimbolos->declare(
-            $name,
-            $type,
-            $token->getLine(),
-            $token->getCharPositionInLine()
-        );
-
-        if (!$declared) {
+        if ($expresiones !== [] && count($expresiones) !== count($identificadores)) {
+            $token = $ctx->getStart();
             $this->addSemanticError(
-                "Redeclaracion de variable '$name' en el mismo ambito.",
+                'Declaracion var invalida: cantidad de identificadores y expresiones no coincide.',
                 $token->getLine(),
                 $token->getCharPositionInLine()
             );
         }
 
-        if ($ctx->expr() !== null) {
-            $exprType = $this->visit($ctx->expr());
-            $this->assertAssignable(
-                $type,
-                is_string($exprType) ? $exprType : self::TYPE_UNKNOWN,
+        foreach ($identificadores as $indice => $identifier) {
+            $name = $identifier->getText();
+            $token = $identifier->getSymbol();
+
+            $declared = $this->tablaSimbolos->declare(
+                $name,
+                $tipoDeclarado,
                 $token->getLine(),
-                $token->getCharPositionInLine(),
-                "No se puede inicializar '$name' de tipo '$type' con valor de tipo '{$exprType}'."
+                $token->getCharPositionInLine()
             );
+
+            if (!$declared) {
+                $this->addSemanticError(
+                    "Redeclaracion de variable '$name' en el mismo ambito.",
+                    $token->getLine(),
+                    $token->getCharPositionInLine()
+                );
+            }
+
+            if (isset($expresiones[$indice])) {
+                $exprType = $this->visit($expresiones[$indice]);
+                $this->assertAssignable(
+                    $tipoDeclarado,
+                    is_string($exprType) ? $exprType : self::TYPE_UNKNOWN,
+                    $token->getLine(),
+                    $token->getCharPositionInLine(),
+                    "No se puede inicializar '$name' de tipo '$tipoDeclarado' con valor de tipo '{$exprType}'."
+                );
+            }
         }
 
         return null;
@@ -219,36 +233,101 @@ final class AnalizadorSemantico extends GolampiBaseVisitor
 
     public function visitConstDecl($ctx): mixed
     {
-        $identifier = $ctx->IDENTIFIER();
-        $name = $identifier->getText();
-        $type = $ctx->typeSpec()->getText();
-        $token = $identifier->getSymbol();
+        $tipoDeclarado = $this->normalizarTipo($ctx->typeSpec()->getText());
+        $identificadores = $ctx->identifierList()->IDENTIFIER();
+        $expresiones = $ctx->exprList()?->expr() ?? [];
 
-        $declared = $this->tablaSimbolos->declare(
-            $name,
-            $type,
-            $token->getLine(),
-            $token->getCharPositionInLine(),
-            'constante'
-        );
-
-        if (!$declared) {
+        if (count($expresiones) !== count($identificadores)) {
+            $token = $ctx->getStart();
             $this->addSemanticError(
-                "Redeclaracion de constante '$name' en el mismo ambito.",
+                'Declaracion const invalida: cantidad de identificadores y expresiones no coincide.',
                 $token->getLine(),
                 $token->getCharPositionInLine()
             );
-            return null;
         }
 
-        $exprType = $this->visit($ctx->expr());
-        $this->assertAssignable(
-            $type,
-            is_string($exprType) ? $exprType : self::TYPE_UNKNOWN,
-            $token->getLine(),
-            $token->getCharPositionInLine(),
-            "No se puede inicializar constante '$name' de tipo '$type' con valor de tipo '{$exprType}'."
-        );
+        foreach ($identificadores as $indice => $identifier) {
+            $name = $identifier->getText();
+            $token = $identifier->getSymbol();
+
+            $declared = $this->tablaSimbolos->declare(
+                $name,
+                $tipoDeclarado,
+                $token->getLine(),
+                $token->getCharPositionInLine(),
+                'constante'
+            );
+
+            if (!$declared) {
+                $this->addSemanticError(
+                    "Redeclaracion de constante '$name' en el mismo ambito.",
+                    $token->getLine(),
+                    $token->getCharPositionInLine()
+                );
+                continue;
+            }
+
+            if (isset($expresiones[$indice])) {
+                $exprType = $this->visit($expresiones[$indice]);
+                $this->assertAssignable(
+                    $tipoDeclarado,
+                    is_string($exprType) ? $exprType : self::TYPE_UNKNOWN,
+                    $token->getLine(),
+                    $token->getCharPositionInLine(),
+                    "No se puede inicializar constante '$name' de tipo '$tipoDeclarado' con valor de tipo '{$exprType}'."
+                );
+            }
+        }
+
+        return null;
+    }
+
+    public function visitShortVarDecl($ctx): mixed
+    {
+        $identificadores = $ctx->identifierList()->IDENTIFIER();
+        $expresiones = $ctx->exprList()->expr();
+        $token = $ctx->getStart();
+
+        if (count($identificadores) !== count($expresiones)) {
+            $this->addSemanticError(
+                'Declaracion corta invalida: cantidad de identificadores y expresiones no coincide.',
+                $token->getLine(),
+                $token->getCharPositionInLine()
+            );
+        }
+
+        $limite = min(count($identificadores), count($expresiones));
+        for ($i = 0; $i < $limite; $i++) {
+            $id = $identificadores[$i];
+            $name = $id->getText();
+            $idToken = $id->getSymbol();
+            $exprType = $this->visit($expresiones[$i]);
+            $exprType = is_string($exprType) ? $this->normalizarTipo($exprType) : self::TYPE_UNKNOWN;
+
+            if ($exprType === self::TYPE_NIL) {
+                $this->addSemanticError(
+                    "Declaracion corta invalida: no se puede inferir tipo de '$name' desde nil.",
+                    $idToken->getLine(),
+                    $idToken->getCharPositionInLine()
+                );
+                $exprType = self::TYPE_UNKNOWN;
+            }
+
+            $declared = $this->tablaSimbolos->declare(
+                $name,
+                $exprType,
+                $idToken->getLine(),
+                $idToken->getCharPositionInLine()
+            );
+
+            if (!$declared) {
+                $this->addSemanticError(
+                    "Redeclaracion de variable '$name' en el mismo ambito.",
+                    $idToken->getLine(),
+                    $idToken->getCharPositionInLine()
+                );
+            }
+        }
 
         return null;
     }
@@ -282,6 +361,32 @@ final class AnalizadorSemantico extends GolampiBaseVisitor
 
         $exprType = $this->visit($ctx->expr());
         $targetType = (string) ($resolved['type'] ?? self::TYPE_UNKNOWN);
+        $operator = $ctx->assignOp()->getText();
+
+        if ($operator !== '=') {
+            $exprType = is_string($exprType) ? $exprType : self::TYPE_UNKNOWN;
+            $targetType = $this->normalizarTipo($targetType);
+            $exprType = $this->normalizarTipo($exprType);
+
+            if (!$this->isNumericType($targetType) || !$this->isNumericType($exprType)) {
+                $this->addSemanticError(
+                    "Asignacion compuesta invalida '$operator': '$name' es '$targetType' y la expresion es '$exprType'.",
+                    $token->getLine(),
+                    $token->getCharPositionInLine()
+                );
+                return self::TYPE_ERROR;
+            }
+
+            if ($operator === '%=' && ($targetType !== self::TYPE_INT || $exprType !== self::TYPE_INT)) {
+                $this->addSemanticError(
+                    "Asignacion compuesta invalida '%=': requiere operandos int.",
+                    $token->getLine(),
+                    $token->getCharPositionInLine()
+                );
+                return self::TYPE_ERROR;
+            }
+        }
+
         $this->assertAssignable(
             $targetType,
             is_string($exprType) ? $exprType : self::TYPE_UNKNOWN,
@@ -727,6 +832,9 @@ final class AnalizadorSemantico extends GolampiBaseVisitor
         if ($ctx->FLOAT_LITERAL() !== null) {
             return self::TYPE_FLOAT;
         }
+        if ($ctx->CHAR_LITERAL() !== null) {
+            return self::TYPE_RUNE;
+        }
         if ($ctx->STRING_LITERAL() !== null) {
             return self::TYPE_STRING;
         }
@@ -762,6 +870,9 @@ final class AnalizadorSemantico extends GolampiBaseVisitor
 
     private function tiposCompatiblesAsignacion(string $destino, string $origen): bool
     {
+        $destino = $this->normalizarTipo($destino);
+        $origen = $this->normalizarTipo($origen);
+
         if ($this->isArrayType($destino) && $origen === self::TYPE_NIL) {
             return true;
         }
@@ -779,6 +890,7 @@ final class AnalizadorSemantico extends GolampiBaseVisitor
 
     private function isNumericType(string $type): bool
     {
+        $type = $this->normalizarTipo($type);
         return $type === self::TYPE_INT || $type === self::TYPE_FLOAT;
     }
 
@@ -789,11 +901,14 @@ final class AnalizadorSemantico extends GolampiBaseVisitor
 
     private function isSameType(string $left, string $right): bool
     {
+        $left = $this->normalizarTipo($left);
+        $right = $this->normalizarTipo($right);
         return $left === $right;
     }
 
     private function isArrayType(string $type): bool
     {
+        $type = $this->normalizarTipo($type);
         return str_starts_with($type, self::TYPE_ARRAY_PREFIX);
     }
 
@@ -812,6 +927,8 @@ final class AnalizadorSemantico extends GolampiBaseVisitor
 
     private function promoteNumericType(string $left, string $right): string
     {
+        $left = $this->normalizarTipo($left);
+        $right = $this->normalizarTipo($right);
         if ($left === self::TYPE_FLOAT || $right === self::TYPE_FLOAT) {
             return self::TYPE_FLOAT;
         }
@@ -837,7 +954,7 @@ final class AnalizadorSemantico extends GolampiBaseVisitor
 
         $tipos = [];
         foreach ($paramListCtx->param() as $paramCtx) {
-            $tipos[] = $paramCtx->typeSpec()->getText();
+            $tipos[] = $this->normalizarTipo($paramCtx->typeSpec()->getText());
         }
         return $tipos;
     }
@@ -848,7 +965,20 @@ final class AnalizadorSemantico extends GolampiBaseVisitor
         if ($returnTypeCtx === null) {
             return [];
         }
-        return [$returnTypeCtx->typeSpec()->getText()];
+        return [$this->normalizarTipo($returnTypeCtx->typeSpec()->getText())];
+    }
+
+    private function normalizarTipo(string $tipo): string
+    {
+        if (str_starts_with($tipo, self::TYPE_ARRAY_PREFIX)) {
+            return self::TYPE_ARRAY_PREFIX . $this->normalizarTipo(substr($tipo, 2));
+        }
+
+        return match ($tipo) {
+            'int32', self::TYPE_RUNE => self::TYPE_INT,
+            'float32' => self::TYPE_FLOAT,
+            default => $tipo,
+        };
     }
 
     /** @param array<int,string> $parametros @param array<int,string> $retorno */

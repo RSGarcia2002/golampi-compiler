@@ -165,7 +165,7 @@ identifierList
     ;
 
 exprList
-    : expr (',' expr)*
+    : expr (',' expr)* ','?
     ;
 
 expr

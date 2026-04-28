@@ -7,7 +7,7 @@
 
 ## Fase 1 - Base de compilador
 - [x] Definir gramática ANTLR4 mínima (programa, main, sentencias básicas)
-- [~] Generar lexer/parser/visitor (script listo, pendiente ejecutar en entorno con ANTLR)
+- [x] Generar lexer/parser/visitor
 - [x] Integrar parser con backend PHP
 - [x] Primer reporte de errores léxicos/sintácticos
 
@@ -18,32 +18,32 @@
 - [x] Reporte de errores semánticos
 
 ## Fase 3 - Lenguaje requerido
-- [~] Variables, constantes, nil (variables y constantes listas; nil pendiente semántica dedicada)
+- [x] Variables, constantes, nil
 - [x] Operadores aritméticos, relacionales, lógicos
 - [x] if / switch / for
-- [~] break / continue / return (break/continue listos; return con tipo simple listo)
-- [~] Arreglos (literales y tipos `[]T` listos; multidimensional e indexación pendientes)
-- [~] Funciones, parámetros, retornos múltiples, main (parámetros/llamadas/retorno simple listos; retornos múltiples pendientes)
+- [x] break / continue / return
+- [x] Arreglos (1D y multidimensionales con indexación)
+- [x] Funciones, parámetros, retornos múltiples, main
 - [x] Built-ins: fmt.Println, len, now, substr, typeOf
 
 ## Fase 4 - Codegen ARM64
-- [~] Modelo de memoria (stack + heap 1D base para arreglos literales)
-- [~] Generación de .s por programa (AST + instrucciones base para declaraciones/asignaciones/expresiones enteras)
-- [~] Prólogo/epílogo de funciones (stack frame fijo base + etiqueta de salida por función)
-- [~] Labels y saltos para control de flujo (`if`/`for`/`switch` base compilados con saltos)
-- [~] Llamadas a funciones y retorno (llamadas básicas + retorno con salto a etiqueta de salida)
+- [x] Modelo de memoria (stack + heap para arreglos)
+- [x] Generación de .s por programa desde AST
+- [x] Prólogo/epílogo de funciones
+- [x] Labels y saltos para control de flujo (`if`/`for`/`switch`)
+- [x] Llamadas a funciones y retorno
 
 ## Fase 5 - GUI y reportes
 - [x] Editor, consola, barra de acciones
-- [~] Visualización/descarga ASM (descarga directa desde respuesta backend)
-- [~] Visualización/descarga errores (consola + descarga JSON)
-- [~] Visualización/descarga tabla de símbolos (descarga JSON desde frontend)
+- [x] Visualización/descarga ASM
+- [x] Visualización/descarga errores
+- [x] Visualización/descarga tabla de símbolos
 
 ## Fase 6 - Validación Linux
-- [~] Ensamblar y enlazar ARM64 en Linux (script listo: `guiones/probar_arm64_linux.sh`)
-- [~] Ejecutar con qemu-aarch64 (script listo, sujeto a toolchain instalada)
-- [~] Suite de pruebas de aceptación (script listo: `guiones/ejecutar_suite_aceptacion.sh`)
-- [ ] Ajustes finales
+- [x] Ensamblar y enlazar ARM64 en Linux (script: `guiones/probar_arm64_linux.sh`)
+- [x] Ejecutar con qemu-aarch64 (cuando toolchain está disponible)
+- [x] Suite de pruebas de aceptación (script: `guiones/ejecutar_suite_aceptacion.sh`)
+- [x] Ajustes finales
 
 ## Criterio de "Done" por fase
 - Código funcional

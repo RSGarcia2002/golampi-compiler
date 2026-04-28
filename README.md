@@ -3,7 +3,7 @@
 Compilador de **Golampi** con interfaz web, análisis léxico/sintáctico/semántico y generación de código **ARM64**.
 
 ## Estado actual
-Fase 3 avanzada + Fase 4 base: semántica con control de flujo (`if`, `for`, `switch`, `break`, `continue`), `const`, funciones con parámetros/llamadas, arreglos `[]T` con literales y built-ins (`len`, `now`, `substr`, `typeOf`), además de salida ARM64 con funciones detectadas y prólogo/epílogo base.
+Proyecto cerrado por fases: análisis léxico/sintáctico/semántico, funciones (incluyendo retornos múltiples), arreglos (incluyendo tipados y multidimensionales), built-ins (`fmt.Println`, `len`, `now`, `substr`, `typeOf`) y generación ARM64 desde AST.
 
 ## Estructura
 - `documentacion/`: planificación, guía de commits, estado de avances.
@@ -48,9 +48,15 @@ Fase 3 avanzada + Fase 4 base: semántica con control de flujo (`if`, `for`, `sw
    ```bash
    ./guiones/ejecutar_suite_aceptacion.sh
    ```
+   Esta suite incluye demos por fase y validación de `ejemplos/aceptacion_*.gol`.
 7. Probar ensamblado/ejecución ARM64 en Linux (si tienes toolchain):
    ```bash
    ./guiones/probar_arm64_linux.sh
+   ```
+9. Validación final para calificación en Linux/QEMU:
+   ```bash
+   ./guiones/precheck_linux_qemu.sh
+   ./guiones/validar_entrega_linux.sh
    ```
 8. (Opcional) Levantar interfaz web local:
    ```bash
@@ -82,7 +88,7 @@ Salida semántica:
 
 Salida ARM64 (fase 4 base avanzada):
 - Archivo: `reportes/programa_fase4.s`
-- Estado: generación desde AST cuando el análisis no tiene errores, con `_start`, funciones compiladas, variables locales en stack, operaciones enteras y control básico `if/for`.
+- Estado: generación desde AST cuando el análisis no tiene errores, con `_start`, funciones compiladas, variables locales en stack, control de flujo y manejo de arreglos en heap.
 
 ## Flujo de trabajo
 1. Planificar fase.
@@ -90,6 +96,20 @@ Salida ARM64 (fase 4 base avanzada):
 3. Probar local (cuando toque Linux, validar ahí).
 4. Actualizar documentación de progreso.
 5. Commit atómico con mensaje claro.
+
+## Linux / QEMU (calificación)
+Comando recomendado en la laptop Linux:
+
+```bash
+./guiones/validar_entrega_linux.sh
+```
+
+Si falta toolchain, instalar en Ubuntu/Debian:
+
+```bash
+sudo apt update
+sudo apt install -y php-cli composer openjdk-17-jre-headless binutils-aarch64-linux-gnu qemu-user
+```
 
 Ver detalle en `documentacion/PLAN_PROYECTO.md` y `documentacion/GUIA_COMMITS.md`.
 

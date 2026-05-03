@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 final class GeneradorARM64 extends GolampiBaseVisitor
 {
+    private const STACK_FRAME_SIZE = 4096;
+
     /** @var array<int,string> */
     private array $lineas = [];
 
@@ -94,9 +96,9 @@ final class GeneradorARM64 extends GolampiBaseVisitor
         $this->emit('main:');
         $this->emit('    stp x29, x30, [sp, #-16]!');
         $this->emit('    mov x29, sp');
-        $this->emit('    sub sp, sp, #256');
+        $this->emit('    sub sp, sp, #' . self::STACK_FRAME_SIZE);
         $this->emit('    // TODO: generar desde AST');
-        $this->emit('    add sp, sp, #256');
+        $this->emit('    add sp, sp, #' . self::STACK_FRAME_SIZE);
         $this->emit('    ldp x29, x30, [sp], #16');
         $this->emit('    ret');
         $this->emitRuntimeHelpers();
@@ -156,7 +158,7 @@ final class GeneradorARM64 extends GolampiBaseVisitor
         $this->emit($nombre . ':');
         $this->emit('    stp x29, x30, [sp, #-16]!');
         $this->emit('    mov x29, sp');
-        $this->emit('    sub sp, sp, #256');
+        $this->emit('    sub sp, sp, #' . self::STACK_FRAME_SIZE);
 
         if ($paramListCtx === null) {
             return;
@@ -179,7 +181,7 @@ final class GeneradorARM64 extends GolampiBaseVisitor
         $etiquetaSalida = $this->etiquetaSalidaFuncion($this->funcionActual);
 
         $this->emit($etiquetaSalida . ':');
-        $this->emit('    add sp, sp, #256');
+        $this->emit('    add sp, sp, #' . self::STACK_FRAME_SIZE);
         $this->emit('    ldp x29, x30, [sp], #16');
         $this->emit('    ret');
     }

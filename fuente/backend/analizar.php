@@ -277,8 +277,18 @@ function ejecutarArm64SiDisponible(string $projectRoot, string $reportsDir): arr
         ];
     }
 
-    $cmdRun = 'qemu-aarch64 ' . escapeshellarg($binPath);
+    $cmdRunBase = 'qemu-aarch64 ' . escapeshellarg($binPath);
+    $cmdRun = comandoDisponible('timeout')
+        ? 'timeout 12s ' . $cmdRunBase
+        : $cmdRunBase;
     $runResult = ejecutarComando($cmdRun, $projectRoot);
+
+    $mensaje = 'Ejecución ARM64 finalizó con error.';
+    if ($runResult['exit_code'] === 0) {
+        $mensaje = 'Ejecución ARM64 completada correctamente.';
+    } elseif ($runResult['exit_code'] === 124) {
+        $mensaje = 'Ejecución ARM64 detenida por timeout (12s). Posible loop infinito en el código generado.';
+    }
 
     return [
         'intentada' => true,
@@ -287,9 +297,7 @@ function ejecutarArm64SiDisponible(string $projectRoot, string $reportsDir): arr
         'codigo_salida' => $runResult['exit_code'],
         'stdout' => $runResult['stdout'],
         'stderr' => $runResult['stderr'],
-        'mensaje' => $runResult['exit_code'] === 0
-            ? 'Ejecución ARM64 completada correctamente.'
-            : 'Ejecución ARM64 finalizó con error.',
+        'mensaje' => $mensaje,
         'binario' => 'reportes/linux/programa_fase4',
     ];
 }

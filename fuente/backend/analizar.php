@@ -371,11 +371,6 @@ $resultadoEjecucion = [
     'mensaje' => 'No se solicitó ejecución del binario ARM64.',
 ];
 
-$solicitaEjecucion = ($input['execute'] ?? false) === true;
-if ($solicitaEjecucion && count($allErrors) === 0 && $asmGenerado !== null) {
-    $resultadoEjecucion = ejecutarArm64SiDisponible($projectRoot, $reportsDir);
-}
-
 if (!is_dir($reportsDir)) {
     mkdir($reportsDir, 0777, true);
 }
@@ -404,6 +399,11 @@ file_put_contents(
 );
 if ($asmGenerado !== null) {
     file_put_contents($reportsDir . '/programa_fase4.s', $asmGenerado);
+}
+
+$solicitaEjecucion = ($input['execute'] ?? false) === true;
+if ($solicitaEjecucion && count($allErrors) === 0 && $asmGenerado !== null) {
+    $resultadoEjecucion = ejecutarArm64SiDisponible($projectRoot, $reportsDir);
 }
 
 if (PHP_SAPI !== 'cli') {

@@ -1090,6 +1090,7 @@ final class AnalizadorSemantico extends GolampiBaseVisitor
             if (
                 !$this->isSameType($leftType, $rightType)
                 && !$this->isNumericPair($leftType, $rightType)
+                && !$this->isNilComparablePair($leftType, $rightType)
                 && $leftType !== self::TYPE_UNKNOWN
                 && $rightType !== self::TYPE_UNKNOWN
             ) {
@@ -1204,6 +1205,32 @@ final class AnalizadorSemantico extends GolampiBaseVisitor
     {
         $type = $this->normalizarTipo($type);
         return str_starts_with($type, self::TYPE_ARRAY_PREFIX);
+    }
+
+    private function isPointerType(string $type): bool
+    {
+        $type = $this->normalizarTipo($type);
+        return str_starts_with($type, '*');
+    }
+
+    private function isNilComparablePair(string $left, string $right): bool
+    {
+        $left = $this->normalizarTipo($left);
+        $right = $this->normalizarTipo($right);
+
+        if ($left === self::TYPE_NIL && $right === self::TYPE_NIL) {
+            return true;
+        }
+
+        if ($left === self::TYPE_NIL && $this->isPointerType($right)) {
+            return true;
+        }
+
+        if ($right === self::TYPE_NIL && $this->isPointerType($left)) {
+            return true;
+        }
+
+        return false;
     }
 
     private function tiposComparablesEnSwitch(string $tipoControl, string $tipoCaso): bool

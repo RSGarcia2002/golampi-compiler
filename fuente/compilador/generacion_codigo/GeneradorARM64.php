@@ -22,7 +22,7 @@ final class GeneradorARM64 extends GolampiBaseVisitor
     /** @var array<int, string> */
     private array $pilaSwitchFin = [];
 
-    /** @var array<int, array{tipo:string,end:string,cond:string}> */
+    /** @var array<int, array{tipo:string,end:string,cond:string,post:string}> */
     private array $pilaControl = [];
 
     /** @var array<string,int> */
@@ -560,9 +560,15 @@ final class GeneradorARM64 extends GolampiBaseVisitor
     {
         $this->emit('    // estructura de control: for');
         $etiquetaCond = $this->nuevaEtiqueta('for_cond');
+        $etiquetaPost = $this->nuevaEtiqueta('for_post');
         $etiquetaFin = $this->nuevaEtiqueta('for_fin');
         $this->pilaBucles[] = ['cond' => $etiquetaCond, 'end' => $etiquetaFin];
-        $this->pilaControl[] = ['tipo' => 'for', 'end' => $etiquetaFin, 'cond' => $etiquetaCond];
+        $this->pilaControl[] = [
+            'tipo' => 'for',
+            'end' => $etiquetaFin,
+            'cond' => $etiquetaCond,
+            'post' => $etiquetaPost,
+        ];
 
         if ($ctx->forClause() !== null && $ctx->forClause()->forInit() !== null) {
             $this->emit('    // inicializacion del for clasico');
@@ -583,6 +589,7 @@ final class GeneradorARM64 extends GolampiBaseVisitor
         }
 
         $this->compilarBloque($ctx->block());
+        $this->emit($etiquetaPost . ':');
         if ($ctx->forClause() !== null && $ctx->forClause()->forPost() !== null) {
             $this->emit('    // actualizacion del for clasico');
             $this->compilarForComponente($ctx->forClause()->forPost());
@@ -694,8 +701,8 @@ final class GeneradorARM64 extends GolampiBaseVisitor
         for ($i = count($this->pilaControl) - 1; $i >= 0; $i--) {
             $actual = $this->pilaControl[$i];
             if ($actual['tipo'] === 'for') {
-                $this->emit('    // continue: volver a condicion del for');
-                $this->emit('    b ' . $actual['cond']);
+                $this->emit('    // continue: saltar a post/condicion del for');
+                $this->emit('    b ' . $actual['post']);
                 break;
             }
         }

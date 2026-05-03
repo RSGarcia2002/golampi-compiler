@@ -37,6 +37,7 @@ if (!class_exists(InputStream::class) || !class_exists(CommonTokenStream::class)
 }
 
 if (is_dir($generatedDir)) {
+    $archivosGenerados = [];
     $iterator = new RecursiveIteratorIterator(
         new RecursiveDirectoryIterator($generatedDir, FilesystemIterator::SKIP_DOTS)
     );
@@ -44,8 +45,31 @@ if (is_dir($generatedDir)) {
     /** @var SplFileInfo $fileInfo */
     foreach ($iterator as $fileInfo) {
         if ($fileInfo->isFile() && $fileInfo->getExtension() === 'php') {
-            require_once $fileInfo->getPathname();
+            $archivosGenerados[] = $fileInfo->getPathname();
         }
+    }
+
+    sort($archivosGenerados, SORT_STRING);
+
+    // Carga determinística para evitar errores de dependencias entre Visitor/BaseVisitor.
+    $ordenPrioritario = [
+        $generatedDir . '/GolampiLexer.php',
+        $generatedDir . '/GolampiParser.php',
+        $generatedDir . '/GolampiVisitor.php',
+        $generatedDir . '/GolampiBaseVisitor.php',
+    ];
+
+    foreach ($ordenPrioritario as $archivoPrioritario) {
+        if (is_file($archivoPrioritario)) {
+            require_once $archivoPrioritario;
+        }
+    }
+
+    foreach ($archivosGenerados as $archivoGenerado) {
+        if (in_array($archivoGenerado, $ordenPrioritario, true)) {
+            continue;
+        }
+        require_once $archivoGenerado;
     }
 }
 

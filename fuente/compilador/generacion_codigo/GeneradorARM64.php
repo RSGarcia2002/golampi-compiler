@@ -314,7 +314,7 @@ final class GeneradorARM64 extends GolampiBaseVisitor
             }
 
             $this->emit("    // valor por defecto para '{$nombre}'");
-            if ($tipoActual === 'string') {
+            if ($this->normalizarTipo($tipoActualRaw ?? 'unknown') === 'string') {
                 $etiquetaVacia = $this->registrarLiteralString('');
                 $this->emit('    ldr x0, =' . $etiquetaVacia);
             } else {

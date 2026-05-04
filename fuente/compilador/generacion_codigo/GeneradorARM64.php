@@ -357,6 +357,26 @@ final class GeneradorARM64 extends GolampiBaseVisitor
     {
         $identificadores = $ctx->identifierList()?->IDENTIFIER() ?? [];
         $expresiones = $ctx->exprList()?->expr() ?? [];
+
+        if (count($identificadores) > 1 && count($expresiones) === 1) {
+            $exprUnica = $expresiones[0];
+            $claseExpr = (new ReflectionClass($exprUnica))->getShortName();
+            if ($claseExpr === 'CallExprContext') {
+                $this->emit('    // declaracion corta multiple desde llamada');
+                $this->compilarExprEnX0($exprUnica);
+                $max = min(count($identificadores), 8);
+                for ($i = 0; $i < $max; $i++) {
+                    $nombre = $identificadores[$i]->getText();
+                    $offset = $this->reservarSlot($nombre);
+                    $this->tiposVariables[$nombre] = $i === 0
+                        ? $this->normalizarTipo($this->tipoAproximadoExpr($exprUnica))
+                        : 'int';
+                    $this->emit('    str x' . $i . ', [x29, #' . $offset . ']');
+                }
+                return null;
+            }
+        }
+
         $limite = min(count($identificadores), count($expresiones));
 
         for ($i = 0; $i < $limite; $i++) {
@@ -367,6 +387,20 @@ final class GeneradorARM64 extends GolampiBaseVisitor
             $this->emit("    // declaracion corta: {$nombre} := <expr>");
             $this->compilarExprEnX0($expresiones[$i]);
             $this->emit('    str x0, [x29, #' . $offset . ']');
+
+            $len = $this->resolverLenEnCompilacion($expresiones[$i]);
+            if ($len !== null) {
+                $this->longitudesConocidas[$nombre] = $len;
+            } else {
+                unset($this->longitudesConocidas[$nombre]);
+            }
+
+            $stringConst = $this->resolverStringConstante($expresiones[$i]);
+            if ($stringConst !== null) {
+                $this->valoresStringConocidos[$nombre] = $stringConst;
+            } else {
+                unset($this->valoresStringConocidos[$nombre]);
+            }
 
             $valorArreglo = $this->resolverValorConstanteExpr($expresiones[$i]);
             if (is_array($valorArreglo)) {
@@ -459,8 +493,14 @@ final class GeneradorARM64 extends GolampiBaseVisitor
     {
         $this->emit('    // return de funcion');
         $exprs = $ctx->exprList()?->expr() ?? [];
-        if (isset($exprs[0])) {
-            $this->compilarExprEnX0($exprs[0]);
+        if ($exprs !== []) {
+            $max = min(count($exprs), 8);
+            for ($i = 0; $i < $max; $i++) {
+                $this->compilarExprEnX0($exprs[$i]);
+                if ($i > 0) {
+                    $this->emit('    mov x' . $i . ', x0');
+                }
+            }
         }
 
         $this->emit('    b ' . $this->etiquetaSalidaFuncion($this->funcionActual));
@@ -764,6 +804,24 @@ final class GeneradorARM64 extends GolampiBaseVisitor
         if ($clase === 'UnaryExprContext') {
             $operador = $exprCtx->children[0]?->getText() ?? '';
             $this->emit("    // expresion unaria '{$operador}'");
+
+            if ($operador === '&') {
+                $inner = $exprCtx->expr();
+                $innerClase = (new ReflectionClass($inner))->getShortName();
+                if ($innerClase === 'IdentifierExprContext') {
+                    $nombreRef = $inner->IDENTIFIER()?->getText() ?? '';
+                    if ($nombreRef !== '' && isset($this->variablesLocales[$nombreRef])) {
+                        $offset = $this->variablesLocales[$nombreRef];
+                        if ($offset < 0) {
+                            $this->emit('    sub x0, x29, #' . abs($offset));
+                        } else {
+                            $this->emit('    add x0, x29, #' . $offset);
+                        }
+                        return;
+                    }
+                }
+            }
+
             $this->compilarExprEnX0($exprCtx->expr());
 
             if ($operador === '-') {
@@ -774,6 +832,11 @@ final class GeneradorARM64 extends GolampiBaseVisitor
             if ($operador === '!') {
                 $this->emit('    cmp x0, #0');
                 $this->emit('    cset x0, eq');
+                return;
+            }
+
+            if ($operador === '*') {
+                $this->emit('    ldr x0, [x0]');
                 return;
             }
 
@@ -842,9 +905,14 @@ final class GeneradorARM64 extends GolampiBaseVisitor
                     break;
                 }
                 $this->compilarExprEnX0($arg);
-                if ($i > 0) {
-                    $this->emit('    mov x' . $i . ', x0');
-                }
+                $this->emit('    sub sp, sp, #16');
+                $this->emit('    str x0, [sp, #8]');
+            }
+
+            $totalArgs = min(count($args), 8);
+            for ($i = $totalArgs - 1; $i >= 0; $i--) {
+                $this->emit('    ldr x' . $i . ', [sp, #8]');
+                $this->emit('    add sp, sp, #16');
             }
 
             if ($nombre !== '') {

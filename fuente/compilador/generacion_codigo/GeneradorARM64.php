@@ -445,17 +445,27 @@ final class GeneradorARM64 extends GolampiBaseVisitor
         if (str_contains($targetText, '[') && $operador === '=') {
             $this->compilarExprEnX0($ctx->expr());
             $this->emit('    mov x12, x0');
-            if (preg_match('/^([a-zA-Z_][a-zA-Z_0-9]*)\[(.+)\]$/', $targetText, $targetMatches) === 1) {
-                $baseNombre = $targetMatches[1];
-                $indiceTexto = trim($targetMatches[2]);
+            if (
+                preg_match('/^([a-zA-Z_][a-zA-Z_0-9]*)/', $targetText, $baseMatches) === 1
+                && preg_match_all('/\[([^\]]+)\]/', $targetText, $indiceMatches) >= 1
+            ) {
+                $baseNombre = $baseMatches[1];
+                $indicesTexto = array_map('trim', $indiceMatches[1]);
                 if (isset($this->variablesLocales[$baseNombre])) {
                     $this->emit('    ldr x10, [x29, #' . $this->variablesLocales[$baseNombre] . ']');
-                    $this->compilarExprTextoEnX0($indiceTexto);
-                    $this->emit('    mov x11, x0');
-                    $this->emit('    add x11, x11, #1');
-                    $this->emit('    lsl x11, x11, #3');
-                    $this->emit('    add x10, x10, x11');
-                    $this->emit('    str x12, [x10]');
+                    $ultimo = count($indicesTexto) - 1;
+                    foreach ($indicesTexto as $idxPos => $indiceTexto) {
+                        $this->compilarExprTextoEnX0($indiceTexto);
+                        $this->emit('    mov x11, x0');
+                        $this->emit('    add x11, x11, #1');
+                        $this->emit('    lsl x11, x11, #3');
+                        $this->emit('    add x10, x10, x11');
+                        if ($idxPos < $ultimo) {
+                            $this->emit('    ldr x10, [x10]');
+                        } else {
+                            $this->emit('    str x12, [x10]');
+                        }
+                    }
                 }
             }
             $indices = $this->extraerIndicesConstantesDesdeTarget($targetText);

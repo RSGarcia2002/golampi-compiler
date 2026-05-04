@@ -316,7 +316,15 @@ final class GeneradorARM64 extends GolampiBaseVisitor
             }
 
             $this->emit("    // valor por defecto para '{$nombre}'");
-            if ($this->normalizarTipo($tipoActualRaw ?? 'unknown') === 'string') {
+            $inicial = null;
+            if ($tipoActualRaw !== null && str_starts_with($tipoActualRaw, '[')) {
+                $inicial = $this->crearArregloCeroDesdeTipo($tipoActualRaw);
+            }
+
+            if (is_array($inicial)) {
+                $this->emit('    // inicializacion por defecto de arreglo en heap');
+                $this->emitArregloConstanteEnHeap($inicial);
+            } elseif ($this->normalizarTipo($tipoActualRaw ?? 'unknown') === 'string') {
                 $etiquetaVacia = $this->registrarLiteralString('');
                 $this->emit('    ldr x0, =' . $etiquetaVacia);
             } else {
@@ -324,12 +332,9 @@ final class GeneradorARM64 extends GolampiBaseVisitor
             }
             $this->emit('    str x0, [x29, #' . $offset . ']');
 
-            if ($tipoActualRaw !== null && str_starts_with($tipoActualRaw, '[')) {
-                $inicial = $this->crearArregloCeroDesdeTipo($tipoActualRaw);
-                if ($inicial !== null) {
-                    $this->valoresArregloConocidos[$nombre] = $inicial;
-                    $this->longitudesConocidas[$nombre] = count($inicial);
-                }
+            if (is_array($inicial)) {
+                $this->valoresArregloConocidos[$nombre] = $inicial;
+                $this->longitudesConocidas[$nombre] = count($inicial);
             }
         }
 
@@ -1088,24 +1093,7 @@ final class GeneradorARM64 extends GolampiBaseVisitor
         if ($clase === 'TypedArrayLiteralExprContext' || $clase === 'BraceArrayLiteralExprContext') {
             $valor = $this->resolverValorConstanteExpr($exprCtx);
             if (is_array($valor)) {
-                $this->usaHeap = true;
-                $cantidad = count($valor);
-                $bytes = ($cantidad + 1) * 8;
-                $this->emit("    // literal de arreglo tipado: {$cantidad} elementos");
-                $this->emit('    ldr x9, =' . $bytes);
-                $this->emit('    mov x10, x20');
-                $this->emit('    add x11, x20, x9');
-                $this->emit('    cmp x11, x21');
-                $this->emit('    b.hi L_panic_oom');
-                $this->emit('    mov x20, x11');
-                $this->emit('    ldr x0, =' . $cantidad);
-                $this->emit('    str x0, [x10, #0]');
-                foreach ($valor as $i => $elemValor) {
-                    $offset = ($i + 1) * 8;
-                    $this->emitValorConstanteEnX0($elemValor);
-                    $this->emit('    str x0, [x10, #' . $offset . ']');
-                }
-                $this->emit('    mov x0, x10');
+                $this->emitArregloConstanteEnHeap($valor, 'literal de arreglo tipado');
                 return;
             }
         }
@@ -1666,6 +1654,10 @@ final class GeneradorARM64 extends GolampiBaseVisitor
 
     private function emitValorConstanteEnX0(mixed $valor): void
     {
+        if (is_array($valor)) {
+            $this->emitArregloConstanteEnHeap($valor, 'literal de arreglo anidado');
+            return;
+        }
         if (is_int($valor)) {
             $this->emit('    ldr x0, =' . $valor);
             return;
@@ -1684,6 +1676,30 @@ final class GeneradorARM64 extends GolampiBaseVisitor
             return;
         }
         $this->emit('    mov x0, #0');
+    }
+
+    private function emitArregloConstanteEnHeap(array $valor, string $comentario = 'literal de arreglo'): void
+    {
+        $this->usaHeap = true;
+        $cantidad = count($valor);
+        $bytes = ($cantidad + 1) * 8;
+        $this->emit("    // {$comentario}: {$cantidad} elementos");
+        $this->emit('    ldr x9, =' . $bytes);
+        $this->emit('    mov x10, x20');
+        $this->emit('    add x11, x20, x9');
+        $this->emit('    cmp x11, x21');
+        $this->emit('    b.hi L_panic_oom');
+        $this->emit('    mov x20, x11');
+        $this->emit('    ldr x0, =' . $cantidad);
+        $this->emit('    str x0, [x10, #0]');
+
+        foreach ($valor as $i => $elemValor) {
+            $offset = ($i + 1) * 8;
+            $this->emitValorConstanteEnX0($elemValor);
+            $this->emit('    str x0, [x10, #' . $offset . ']');
+        }
+
+        $this->emit('    mov x0, x10');
     }
 
     private function extraerIndicesConstantesDesdeTarget(string $targetText): ?array

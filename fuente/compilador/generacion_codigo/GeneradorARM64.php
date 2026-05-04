@@ -1692,20 +1692,18 @@ final class GeneradorARM64 extends GolampiBaseVisitor
         $this->emit('    mov x20, x11');
         $this->emit('    ldr x0, =' . $cantidad);
         $this->emit('    str x0, [x10, #0]');
+        $this->emit('    sub sp, sp, #16');
+        $this->emit('    str x10, [sp, #8]');
 
         foreach ($valor as $i => $elemValor) {
             $offset = ($i + 1) * 8;
-            // Guardar base del arreglo padre porque la compilacion del elemento
-            // (sobre todo si es arreglo anidado) reutiliza x10 internamente.
-            $this->emit('    sub sp, sp, #16');
-            $this->emit('    str x10, [sp, #8]');
             $this->emitValorConstanteEnX0($elemValor);
             $this->emit('    ldr x13, [sp, #8]');
-            $this->emit('    add sp, sp, #16');
             $this->emit('    str x0, [x13, #' . $offset . ']');
         }
 
-        $this->emit('    mov x0, x10');
+        $this->emit('    ldr x0, [sp, #8]');
+        $this->emit('    add sp, sp, #16');
     }
 
     private function extraerIndicesConstantesDesdeTarget(string $targetText): ?array

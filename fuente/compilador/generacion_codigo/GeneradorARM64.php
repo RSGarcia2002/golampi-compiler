@@ -171,7 +171,9 @@ final class GeneradorARM64 extends GolampiBaseVisitor
             }
 
             $nombreParam = $param->IDENTIFIER()?->getText() ?? ('param' . $indice);
+            $tipoParam = $this->normalizarTipo($param->typeSpec()?->getText() ?? 'unknown');
             $offset = $this->reservarSlot($nombreParam);
+            $this->tiposVariables[$nombreParam] = $tipoParam;
             $this->emit('    str x' . $indice . ', [x29, #' . $offset . ']');
         }
     }
@@ -279,7 +281,7 @@ final class GeneradorARM64 extends GolampiBaseVisitor
         for ($i = 0; $i < $limite; $i++) {
             $nombre = $identificadores[$i]->getText();
             $offset = $this->reservarSlot($nombre);
-            $tipoActualRaw = $tipoDeclaradoRaw ?? (isset($expresiones[$i]) ? $this->tipoAproximadoExpr($expresiones[$i]) : 'unknown');
+            $tipoActualRaw = $tipoDeclaradoRaw ?? (isset($expresiones[$i]) ? $this->tipoInferidoParaAsignacion($expresiones[$i]) : 'unknown');
             $tipoDeclarado = $this->normalizarTipo($tipoActualRaw);
             $this->tiposVariables[$nombre] = $tipoDeclarado;
             $this->emit("    // declaracion: var {$nombre} {$tipoDeclarado}");
@@ -382,7 +384,7 @@ final class GeneradorARM64 extends GolampiBaseVisitor
         for ($i = 0; $i < $limite; $i++) {
             $nombre = $identificadores[$i]->getText();
             $offset = $this->reservarSlot($nombre);
-            $tipo = $this->normalizarTipo($this->tipoAproximadoExpr($expresiones[$i]));
+            $tipo = $this->normalizarTipo($this->tipoInferidoParaAsignacion($expresiones[$i]));
             $this->tiposVariables[$nombre] = $tipo;
             $this->emit("    // declaracion corta: {$nombre} := <expr>");
             $this->compilarExprEnX0($expresiones[$i]);
@@ -432,6 +434,8 @@ final class GeneradorARM64 extends GolampiBaseVisitor
 
         $operador = $ctx->assignOp()?->getText() ?? '=';
         $this->emit("    // asignacion: {$nombre} {$operador} <expr>");
+        $tipoDestino = $this->tiposVariables[$nombre] ?? 'unknown';
+        $esRefDestino = str_starts_with((string) $tipoDestino, '*') && !str_starts_with($targetText, '*');
 
         if (str_contains($targetText, '[') && $operador === '=') {
             $this->compilarExprEnX0($ctx->expr());
@@ -447,7 +451,12 @@ final class GeneradorARM64 extends GolampiBaseVisitor
         if ($operador === '=') {
             $this->compilarExprEnX0($ctx->expr());
         } else {
-            $this->emit('    ldr x1, [x29, #' . $this->variablesLocales[$nombre] . ']');
+            if ($esRefDestino) {
+                $this->emit('    ldr x9, [x29, #' . $this->variablesLocales[$nombre] . ']');
+                $this->emit('    ldr x1, [x9]');
+            } else {
+                $this->emit('    ldr x1, [x29, #' . $this->variablesLocales[$nombre] . ']');
+            }
             $this->compilarExprEnX0($ctx->expr());
             if ($operador === '+=') {
                 $this->emit('    add x0, x1, x0');
@@ -463,7 +472,12 @@ final class GeneradorARM64 extends GolampiBaseVisitor
             }
         }
 
-        $this->emit('    str x0, [x29, #' . $this->variablesLocales[$nombre] . ']');
+        if ($esRefDestino) {
+            $this->emit('    ldr x9, [x29, #' . $this->variablesLocales[$nombre] . ']');
+            $this->emit('    str x0, [x9]');
+        } else {
+            $this->emit('    str x0, [x29, #' . $this->variablesLocales[$nombre] . ']');
+        }
 
         $len = $this->resolverLenEnCompilacion($ctx->expr());
         if ($len !== null) {
@@ -497,9 +511,12 @@ final class GeneradorARM64 extends GolampiBaseVisitor
             $max = min(count($exprs), 8);
             for ($i = 0; $i < $max; $i++) {
                 $this->compilarExprEnX0($exprs[$i]);
-                if ($i > 0) {
-                    $this->emit('    mov x' . $i . ', x0');
-                }
+                $this->emit('    sub sp, sp, #16');
+                $this->emit('    str x0, [sp, #8]');
+            }
+            for ($i = $max - 1; $i >= 0; $i--) {
+                $this->emit('    ldr x' . $i . ', [sp, #8]');
+                $this->emit('    add sp, sp, #16');
             }
         }
 
@@ -784,6 +801,11 @@ final class GeneradorARM64 extends GolampiBaseVisitor
             if ($nombre !== '' && isset($this->variablesLocales[$nombre])) {
                 $this->emit("    // cargar variable '{$nombre}'");
                 $this->emit('    ldr x0, [x29, #' . $this->variablesLocales[$nombre] . ']');
+                $tipoVar = $this->tiposVariables[$nombre] ?? 'unknown';
+                if (str_starts_with((string) $tipoVar, '*')) {
+                    $this->emit('    // parametro/variable por referencia: cargar valor apuntado');
+                    $this->emit('    ldr x0, [x0]');
+                }
             } else {
                 $this->emit('    mov x0, #0');
             }
@@ -848,6 +870,24 @@ final class GeneradorARM64 extends GolampiBaseVisitor
             $derecha = $exprCtx->expr(1);
             $operador = $exprCtx->children[1]?->getText() ?? '';
             $this->emit("    // expresion binaria '{$operador}'");
+
+            if (in_array($operador, ['==', '!='], true)) {
+                $izqTexto = $izquierda?->getText() ?? '';
+                $derTexto = $derecha?->getText() ?? '';
+                if (
+                    ($izqTexto === 'nil' && $this->esIdentificadorPuntero($derecha))
+                    || ($derTexto === 'nil' && $this->esIdentificadorPuntero($izquierda))
+                ) {
+                    $this->compilarExprSinDesreferenciarEnX0($izquierda);
+                    $this->emit('    sub sp, sp, #16');
+                    $this->emit('    str x0, [sp, #8]');
+                    $this->compilarExprSinDesreferenciarEnX0($derecha);
+                    $this->emit('    ldr x1, [sp, #8]');
+                    $this->emit('    add sp, sp, #16');
+                    $this->emitOperacionBinaria($operador);
+                    return;
+                }
+            }
 
             if ($operador === '&&') {
                 $falseLabel = $this->nuevaEtiqueta('and_false');
@@ -956,7 +996,7 @@ final class GeneradorARM64 extends GolampiBaseVisitor
 
                 if ($nombre === 'typeOf') {
                     $this->emit('    // builtin typeOf(...)');
-                    $tipo = isset($args[0]) ? $this->tipoAproximadoExpr($args[0]) : 'unknown';
+                    $tipo = isset($args[0]) ? $this->tipoNominalExpr($args[0]) : 'unknown';
                     $etiqueta = $this->registrarLiteralString($tipo);
                     $this->emit('    ldr x0, =' . $etiqueta);
                     return;
@@ -1563,6 +1603,10 @@ final class GeneradorARM64 extends GolampiBaseVisitor
 
     private function normalizarTipo(string $tipo): string
     {
+        if (str_starts_with($tipo, '*')) {
+            return '*' . $this->normalizarTipo(substr($tipo, 1));
+        }
+
         if (str_starts_with($tipo, '[]')) {
             return '[]' . $this->normalizarTipo(substr($tipo, 2));
         }
@@ -1900,6 +1944,82 @@ final class GeneradorARM64 extends GolampiBaseVisitor
     private function escaparAsmString(string $texto): string
     {
         return addcslashes($texto, "\\\"\n\r\t");
+    }
+
+    private function compilarExprSinDesreferenciarEnX0($exprCtx): void
+    {
+        if ($exprCtx === null) {
+            $this->emit('    mov x0, #0');
+            return;
+        }
+
+        $clase = (new ReflectionClass($exprCtx))->getShortName();
+        if ($clase === 'IdentifierExprContext') {
+            $nombre = $exprCtx->IDENTIFIER()?->getText() ?? '';
+            if ($nombre !== '' && isset($this->variablesLocales[$nombre])) {
+                $this->emit("    // cargar variable '{$nombre}' (sin desreferenciar)");
+                $this->emit('    ldr x0, [x29, #' . $this->variablesLocales[$nombre] . ']');
+                return;
+            }
+        }
+
+        $this->compilarExprEnX0($exprCtx);
+    }
+
+    private function esIdentificadorPuntero($exprCtx): bool
+    {
+        if ($exprCtx === null) {
+            return false;
+        }
+        $clase = (new ReflectionClass($exprCtx))->getShortName();
+        if ($clase !== 'IdentifierExprContext') {
+            return false;
+        }
+        $nombre = $exprCtx->IDENTIFIER()?->getText() ?? '';
+        if ($nombre === '') {
+            return false;
+        }
+        $tipo = $this->tiposVariables[$nombre] ?? 'unknown';
+        return str_starts_with((string) $tipo, '*');
+    }
+
+    private function tipoNominalExpr($exprCtx): string
+    {
+        if ($exprCtx === null) {
+            return 'unknown';
+        }
+
+        $clase = (new ReflectionClass($exprCtx))->getShortName();
+        if ($clase === 'LiteralExprContext') {
+            $texto = $exprCtx->literal()?->getText() ?? '';
+            if (preg_match('/^-?\d+$/', $texto) === 1) {
+                return 'int32';
+            }
+            if (preg_match('/^-?\d+\.\d+$/', $texto) === 1) {
+                return 'float32';
+            }
+            if ($texto === 'true' || $texto === 'false') {
+                return 'bool';
+            }
+            if ($texto !== '' && str_starts_with($texto, '"') && str_ends_with($texto, '"')) {
+                return 'string';
+            }
+        }
+
+        return $this->tipoAproximadoExpr($exprCtx);
+    }
+
+    private function tipoInferidoParaAsignacion($exprCtx): string
+    {
+        $tipo = $this->tipoAproximadoExpr($exprCtx);
+        if ($exprCtx !== null) {
+            $clase = (new ReflectionClass($exprCtx))->getShortName();
+            if ($clase === 'IdentifierExprContext' && str_starts_with($tipo, '*')) {
+                // Leer un identificador puntero produce el valor apuntado.
+                return substr($tipo, 1);
+            }
+        }
+        return $tipo;
     }
 
     private function recortarString(string $base, int $inicio, int $cantidad): string

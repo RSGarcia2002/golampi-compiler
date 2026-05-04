@@ -855,7 +855,13 @@ final class GeneradorARM64 extends GolampiBaseVisitor
                 if ($innerClase === 'IdentifierExprContext') {
                     $nombreRef = $inner->IDENTIFIER()?->getText() ?? '';
                     if ($nombreRef !== '' && isset($this->variablesLocales[$nombreRef])) {
+                        $tipoRef = (string) ($this->tiposVariables[$nombreRef] ?? 'unknown');
                         $offset = $this->variablesLocales[$nombreRef];
+                        if ($this->esTipoArreglo($tipoRef) || $this->esTipoPunteroAArreglo($tipoRef)) {
+                            // Para arreglos, el slot ya contiene el puntero al bloque en heap.
+                            $this->emit('    ldr x0, [x29, #' . $offset . ']');
+                            return;
+                        }
                         if ($offset < 0) {
                             $this->emit('    sub x0, x29, #' . abs($offset));
                         } else {
@@ -1810,6 +1816,15 @@ final class GeneradorARM64 extends GolampiBaseVisitor
     private function esTipoArreglo(string $tipo): bool
     {
         return str_starts_with($tipo, '[]') || preg_match('/^\[[0-9]+\]/', $tipo) === 1;
+    }
+
+    private function esTipoPunteroAArreglo(string $tipo): bool
+    {
+        if (!str_starts_with($tipo, '*')) {
+            return false;
+        }
+
+        return $this->esTipoArreglo(ltrim($tipo, '*'));
     }
 
     private function compilarPunteroArregloEnX0($exprCtx): void

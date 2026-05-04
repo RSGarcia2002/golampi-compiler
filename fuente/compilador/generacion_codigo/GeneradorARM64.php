@@ -439,6 +439,20 @@ final class GeneradorARM64 extends GolampiBaseVisitor
 
         if (str_contains($targetText, '[') && $operador === '=') {
             $this->compilarExprEnX0($ctx->expr());
+            $this->emit('    mov x12, x0');
+            if (preg_match('/^([a-zA-Z_][a-zA-Z_0-9]*)\[(.+)\]$/', $targetText, $targetMatches) === 1) {
+                $baseNombre = $targetMatches[1];
+                $indiceTexto = trim($targetMatches[2]);
+                if (isset($this->variablesLocales[$baseNombre])) {
+                    $this->emit('    ldr x10, [x29, #' . $this->variablesLocales[$baseNombre] . ']');
+                    $this->compilarExprTextoEnX0($indiceTexto);
+                    $this->emit('    mov x11, x0');
+                    $this->emit('    add x11, x11, #1');
+                    $this->emit('    lsl x11, x11, #3');
+                    $this->emit('    add x10, x10, x11');
+                    $this->emit('    str x12, [x10]');
+                }
+            }
             $indices = $this->extraerIndicesConstantesDesdeTarget($targetText);
             $valorConst = $this->resolverValorConstanteExpr($ctx->expr());
             if ($indices !== null && $valorConst !== null) {
@@ -784,15 +798,23 @@ final class GeneradorARM64 extends GolampiBaseVisitor
         }
 
         if ($clase === 'IndexExprContext') {
+            $baseClase = (new ReflectionClass($exprCtx->expr(0)))->getShortName();
             $valor = $this->resolverValorConstanteExpr($exprCtx);
-            if ($valor !== null) {
+            if ($valor !== null && $baseClase !== 'IdentifierExprContext') {
                 $this->emit('    // acceso por indice (valor conocido en compilacion)');
                 $this->emitValorConstanteEnX0($valor);
                 return;
             }
 
-            $this->emit('    // acceso por indice (stub backend base)');
-            $this->emit('    mov x0, #0');
+            $this->emit('    // acceso por indice (runtime)');
+            $this->compilarPunteroArregloEnX0($exprCtx->expr(0));
+            $this->emit('    mov x10, x0');
+            $this->compilarExprEnX0($exprCtx->expr(1));
+            $this->emit('    mov x11, x0');
+            $this->emit('    add x11, x11, #1');
+            $this->emit('    lsl x11, x11, #3');
+            $this->emit('    add x10, x10, x11');
+            $this->emit('    ldr x0, [x10]');
             return;
         }
 
@@ -1060,8 +1082,24 @@ final class GeneradorARM64 extends GolampiBaseVisitor
         if ($clase === 'TypedArrayLiteralExprContext' || $clase === 'BraceArrayLiteralExprContext') {
             $valor = $this->resolverValorConstanteExpr($exprCtx);
             if (is_array($valor)) {
-                $this->emit('    // literal de arreglo tipado (referencia simbolica)');
-                $this->emit('    mov x0, #0');
+                $this->usaHeap = true;
+                $cantidad = count($valor);
+                $bytes = ($cantidad + 1) * 8;
+                $this->emit("    // literal de arreglo tipado: {$cantidad} elementos");
+                $this->emit('    ldr x9, =' . $bytes);
+                $this->emit('    mov x10, x20');
+                $this->emit('    add x11, x20, x9');
+                $this->emit('    cmp x11, x21');
+                $this->emit('    b.hi L_panic_oom');
+                $this->emit('    mov x20, x11');
+                $this->emit('    ldr x0, =' . $cantidad);
+                $this->emit('    str x0, [x10, #0]');
+                foreach ($valor as $i => $elemValor) {
+                    $offset = ($i + 1) * 8;
+                    $this->emitValorConstanteEnX0($elemValor);
+                    $this->emit('    str x0, [x10, #' . $offset . ']');
+                }
+                $this->emit('    mov x0, x10');
                 return;
             }
         }
@@ -1771,7 +1809,62 @@ final class GeneradorARM64 extends GolampiBaseVisitor
 
     private function esTipoArreglo(string $tipo): bool
     {
-        return str_starts_with($tipo, '[]');
+        return str_starts_with($tipo, '[]') || preg_match('/^\[[0-9]+\]/', $tipo) === 1;
+    }
+
+    private function compilarPunteroArregloEnX0($exprCtx): void
+    {
+        if ($exprCtx === null) {
+            $this->emit('    mov x0, #0');
+            return;
+        }
+
+        $clase = (new ReflectionClass($exprCtx))->getShortName();
+        if ($clase === 'IdentifierExprContext') {
+            $nombre = $exprCtx->IDENTIFIER()?->getText() ?? '';
+            if ($nombre !== '' && isset($this->variablesLocales[$nombre])) {
+                $this->emit("    // base arreglo '{$nombre}'");
+                $this->emit('    ldr x0, [x29, #' . $this->variablesLocales[$nombre] . ']');
+                return;
+            }
+        }
+
+        $this->compilarExprEnX0($exprCtx);
+    }
+
+    private function compilarExprTextoEnX0(string $texto): void
+    {
+        $texto = trim($texto);
+        if (preg_match('/^-?\d+$/', $texto) === 1) {
+            $this->emit('    ldr x0, =' . $texto);
+            return;
+        }
+
+        if (preg_match('/^([a-zA-Z_][a-zA-Z_0-9]*)$/', $texto, $m) === 1) {
+            $nombre = $m[1];
+            if (isset($this->variablesLocales[$nombre])) {
+                $this->emit('    ldr x0, [x29, #' . $this->variablesLocales[$nombre] . ']');
+                return;
+            }
+        }
+
+        if (preg_match('/^([a-zA-Z_][a-zA-Z_0-9]*)\s*([+-])\s*(-?\d+)$/', $texto, $m) === 1) {
+            $nombre = $m[1];
+            $op = $m[2];
+            $num = (int) $m[3];
+            if (isset($this->variablesLocales[$nombre])) {
+                $this->emit('    ldr x0, [x29, #' . $this->variablesLocales[$nombre] . ']');
+                if ($op === '+') {
+                    $this->emit('    add x0, x0, #' . $num);
+                } else {
+                    $this->emit('    sub x0, x0, #' . $num);
+                }
+                return;
+            }
+        }
+
+        // fallback conservador
+        $this->emit('    mov x0, #0');
     }
 
     /**

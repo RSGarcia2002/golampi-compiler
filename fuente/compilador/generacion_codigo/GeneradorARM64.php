@@ -1205,6 +1205,16 @@ final class GeneradorARM64 extends GolampiBaseVisitor
             $this->emit('    orr x0, x1, x0');
             return;
         }
+        
+        if ($operador === '^^'){
+            $this->emit('    // operacion logica: XOR');
+            $this->emit('    cmp x1, #0');
+            $this->emit('    cset x1, ne');
+            $this->emit('    cmp x0, #0');
+            $this->emit('    cset x0, ne');
+            $this->emit('    eor x0, x1, x0');
+            return;
+        }
 
         $this->emit('    // operador no soportado: ' . $operador);
         $this->emit('    mov x0, #0');
@@ -1609,7 +1619,7 @@ final class GeneradorARM64 extends GolampiBaseVisitor
 
         if ($clase === 'BinaryExprContext') {
             $operador = $exprCtx->children[1]?->getText() ?? '';
-            if (in_array($operador, ['==', '!=', '<', '<=', '>', '>=', '&&', '||'], true)) {
+            if (in_array($operador, ['==', '!=', '<', '<=', '>', '>=', '&&', '||', '^^'], true)) {
                 return 'bool';
             }
             $tipoIzq = $this->tipoAproximadoExpr($exprCtx->expr(0));

@@ -1104,7 +1104,7 @@ final class AnalizadorSemantico extends GolampiBaseVisitor
             return self::TYPE_BOOL;
         }
 
-        if (in_array($operator, ['&&', '||'], true)) {
+        if (in_array($operator, ['&&', '||', '^^'], true)) {
             if ($leftType !== self::TYPE_BOOL || $rightType !== self::TYPE_BOOL) {
                 $this->addSemanticError(
                     "Operacion logica invalida: '$operator' requiere bool y se recibio '$leftType' y '$rightType'.",

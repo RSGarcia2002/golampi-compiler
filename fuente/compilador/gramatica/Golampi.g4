@@ -179,6 +179,7 @@ expr
     | expr ('<' | '<=' | '>' | '>=') expr # binaryExpr
     | expr ('==' | '!=') expr           # binaryExpr
     | expr '&&' expr                    # binaryExpr
+    | expr '^^' expr                    # binaryExpr
     | expr '||' expr                    # binaryExpr
     | '(' expr ')'                      # groupedExpr
     | baseType '(' expr ')'             # castExpr
